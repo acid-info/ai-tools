@@ -166,17 +166,6 @@ Each posted review ends with a hidden HTML comment carrying the findings as JSON
 <!-- ai-review:findings {"v":1,"pr":153,"issues":[...]} -->
 ```
 
-A later `/ai-fix` command reads this back off the PR via the API -- no artifacts, no cross-run
-state. `>` is escaped as `\u003e` so issue text echoed from a diff cannot close the comment
-early; it parses back normally. If the marker would push the body past 60000 characters
-(GitHub's cap is 65536) it is dropped and a warning is logged -- losing the marker beats losing
-the review.
-
-`/ai-fix` will be its **own** workflow in this repo, not a `mode:` input on this one. It needs
-PR-head checkout and push, which is a fundamentally different trust boundary from "never check
-out PR head".
-
 ## License
 
-MIT. Extracted from [`logos-co/logos-web`](https://github.com/logos-co/logos-web), which is
-dual-licensed MIT / Apache-2.0.
+MIT.
