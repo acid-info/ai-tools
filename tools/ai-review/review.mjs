@@ -78,7 +78,7 @@ const effortConfig = (model) =>
 // ---------------------------------------------------------------- config ---
 
 const DEFAULTS = {
-  anthropic_model: 'claude-opus-5',
+  anthropic_model: 'claude-opus-5-5',
   openai_model: 'gpt-5.6-terra',
   synth_model: 'claude-haiku-4-5-20251001',
   max_diff_tokens: 80_000, // hard budget cap
@@ -193,9 +193,10 @@ const approxTokens = (s) => Math.ceil(s.length / 4)
 // Keep this in sync with DEFAULTS above (anthropic_model / openai_model /
 // synth_model) -- consumer repos cannot set a model, so this file is the only place.
 const PRICES = {
+  'claude-opus-5-5': { in: 4, out: 20 },
   'claude-opus-5': { in: 5, out: 25 },
   'claude-opus-4-8': { in: 5, out: 25 },
-  'claude-sonnet-5': { in: 3, out: 15 },
+  'claude-sonnet-5': { in: 2, out: 10 },
   'claude-haiku-4-5-20251001': { in: 1, out: 5 },
   'gpt-5.3-codex': { in: 1.75, out: 14 },
   'gpt-5.4-2026-03-05': { in: 2.5, out: 15 },
