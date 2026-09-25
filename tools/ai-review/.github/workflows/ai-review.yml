@@ -8,16 +8,17 @@ on:
       OPENAI_API_KEY:
         required: false
 
-concurrency:
-  group: ai-review-${{ github.event.issue.number }}
-  cancel-in-progress: true
-
 jobs:
   review:
     if: >
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/ai-review') &&
       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+    # Job-level so it applies after the `if`: at workflow level, every ordinary PR comment
+    # joined the group and cancelled the review in progress.
+    concurrency:
+      group: ai-review-${{ github.event.issue.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

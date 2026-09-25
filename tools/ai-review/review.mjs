@@ -126,13 +126,15 @@ function loadConfig() {
   const cfg = { ...DEFAULTS }
   const path = '.github/ai-review.yml'
   if (!existsSync(path)) return cfg
+  const unquote = (s) => s.trim().replace(/^(["'])(.*)\1$/, '$2')
   let currentList = null
   for (const raw of readFileSync(path, 'utf8').split('\n')) {
     const line = raw.replace(/#.*$/, '').trimEnd()
     if (!line.trim()) continue
-    const listItem = line.match(/^\s+-\s+(.*)$/)
+    // YAML allows block-sequence items at column 0, directly under their key.
+    const listItem = line.match(/^\s*-\s+(.*)$/)
     if (listItem && currentList) {
-      cfg[currentList].push(listItem[1].trim().replace(/^(["'])(.*)\1$/, '$2'))
+      cfg[currentList].push(unquote(listItem[1]))
       continue
     }
     const kv = line.match(/^([\w_]+):\s*(.*)$/)
@@ -152,9 +154,13 @@ function loadConfig() {
       cfg[key] = []
       currentList = key
     } else {
-      // Strip surrounding quotes from scalars too, not just list items.
-      const scalar = val.trim().replace(/^(["'])(.*)\1$/, '$2')
-      cfg[key] = /^\d+$/.test(scalar) ? Number(scalar) : scalar
+      // Every overridable key is a list: a bare string would later be spread
+      // into one-character globs, and "*" alone ignores every root-level file.
+      const scalar = unquote(val)
+      const flow = scalar.match(/^\[(.*)\]$/)
+      cfg[key] = flow
+        ? flow[1].split(',').map(unquote).filter(Boolean)
+        : [scalar]
       currentList = null
     }
   }
@@ -499,6 +505,7 @@ async function codexReview(diff, guidelines) {
     body: JSON.stringify({
       model: cfg.openai_model,
       max_output_tokens: MAX_RESPONSE_TOKENS,
+      ...effortConfig(cfg.openai_model),
       input: [
         {
           role: 'system',
@@ -529,7 +536,12 @@ async function codexReview(diff, guidelines) {
 
 // `diag` separates a truncated answer from a refusal from malformed output.
 function parseReview(text, source, diag = {}) {
-  const cleaned = text.replace(/```json|```/g, '').trim()
+  // Only an outer fence: fences inside string values are code in `suggested_fix`.
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim()
   // Direct parse first; brace-slicing is only a fallback for prose-wrapped JSON.
   let parsed
   try {
@@ -774,23 +786,27 @@ async function postReview(merged, meta) {
   }).replace(/>/g, '\\u003e')
   const marker = `<!-- ai-review:findings ${findings} -->`
   // GitHub caps a comment body at 65536 chars; losing the marker beats losing the review.
-  if (bodyLines.join('\n').length + marker.length + 2 <= 60_000) {
-    bodyLines.push('', marker)
-  } else {
+  const MAX_BODY = 60_000
+  const finalizeBody = (lines) => {
+    let text = lines.join('\n')
+    if (text.length > MAX_BODY)
+      text = `${text.slice(0, MAX_BODY - 100)}\n\n… (truncated to fit GitHub's comment limit)`
+    if (text.length + marker.length + 2 <= MAX_BODY) return `${text}\n\n${marker}`
     console.warn(
-      `[warn] findings marker omitted: it would push the review body past the 60000-char ` +
-        `guard (body ${bodyLines.join('\n').length}, marker ${marker.length}).`
+      `[warn] findings marker omitted: it would push the review body past the ${MAX_BODY}-char ` +
+        `guard (body ${text.length}, marker ${marker.length}).`
     )
+    return text
   }
 
-  const body = bodyLines.join('\n')
+  const body = finalizeBody(bodyLines)
 
   const comments = anchored.map((i) => ({
     path: i.file,
     line: issueLine(i),
     side: 'RIGHT',
     body:
-      `${icon[i.severity] ?? '•'} **${i.severity.toUpperCase()}** (${i.category})` +
+      `${icon[i.severity] ?? '•'} **${i.severity.toUpperCase()}** (${deMention(i.category)})` +
       `${i.agreement ? ' -- flagged by both models' : ''}\n\n${deMention(i.issue)}\n\n` +
       (i.suggested_fix
         ? `**Suggested fix:** ${deMention(i.suggested_fix)}`
@@ -815,10 +831,12 @@ async function postReview(merged, meta) {
     console.error(
       `[warn] inline review failed (${e.message}); posting summary + list instead.`
     )
-    const flat = anchored.map(flatItem).join('\n')
+    const flatBody = anchored.length
+      ? finalizeBody([...bodyLines, '', ...anchored.map(flatItem)])
+      : body
     await gh(`/repos/${OWNER}/${NAME}/issues/${PR_NUMBER}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ body: `${body}\n\n${flat}` }),
+      body: JSON.stringify({ body: flatBody }),
     })
   }
   return criticals
@@ -837,15 +855,28 @@ const {
   validLines,
 } = await getDiff()
 if (!diff.trim()) {
-  const body = noPatch.length
-    ? `🤖 AI review could NOT run: GitHub returned no reviewable diff for ${noPatch.length} ` +
-      `changed file(s) (diffs too large): ${noPatch.slice(0, 10).join(', ')}` +
-      `${noPatch.length > 10 ? ', …' : ''}. These changes were NOT reviewed.`
+  const unreviewed = [
+    noPatch.length &&
+      `GitHub returned no reviewable diff for ${noPatch.length} changed file(s) (diffs too large): ` +
+        `${noPatch.slice(0, 10).join(', ')}${noPatch.length > 10 ? ', …' : ''}`,
+    omitted &&
+      `${omitted} file(s) exceeded the diff token budget (${cfg.max_diff_tokens} tokens)`,
+    unlisted &&
+      `GitHub's file listing is capped and left ${unlisted} changed file(s) unlisted`,
+  ].filter(Boolean)
+  const body = unreviewed.length
+    ? `🤖 AI review could NOT run -- these changes were NOT reviewed:\n` +
+      unreviewed.map((s) => `- ${s}`).join('\n')
     : '🤖 Nothing reviewable in this PR after filtering (lockfiles/generated code are skipped).'
-  await gh(`/repos/${OWNER}/${NAME}/issues/${PR_NUMBER}/comments`, {
-    method: 'POST',
-    body: JSON.stringify({ body }),
-  })
+  if (process.env.DRY_RUN) {
+    console.log('\n===== DRY RUN -- comment that WOULD be posted =====\n')
+    console.log(body)
+  } else {
+    await gh(`/repos/${OWNER}/${NAME}/issues/${PR_NUMBER}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    })
+  }
   if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, 'criticals=0\n')
   process.exit(0)
 }
