@@ -18,6 +18,8 @@ swapping a model is one edit here, not three edits across three repos.
    `synth_effort`) deduplicates, marks issues both models found, drops nits and sorts by
    severity.
 5. Findings at or above the severity threshold are posted, anchored to diff lines where possible.
+   The review body ends with an **API usage** table: tokens (in, cached, out) and estimated cost
+   per call, plus the total.
 
 If one provider is down the review degrades to a single model rather than failing. If that is
 `synth_model`'s provider, synthesis moves to the surviving reviewer's model. If synthesis
@@ -114,8 +116,9 @@ Set `SKIP_GUIDELINES=1` to review without any guideline files.
 
 Edit `DEFAULTS` in `review.mjs`, then check **two** other places in the same file:
 
-1. **`PRICES`** -- add the new model, or the cost line reports it as unpriced and excludes it
-   from the total.
+1. **`PRICES`** -- add the new model, or the cost line and the API usage table report it as
+   unpriced and exclude it from the total. Cache reads cost a tenth of input by default; set
+   `cacheRead` to override that fraction.
 2. **`EFFORT_MODELS`** / **`REASONING_MODELS`** -- model-family regexes gating
    `output_config.effort` (Claude) and `reasoning.effort` (OpenAI). A model string that does not
    match **silently loses the effort config** rather than erroring. Newer Claude models need it;

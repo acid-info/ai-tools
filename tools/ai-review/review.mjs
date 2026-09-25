@@ -201,11 +201,13 @@ const ignoreRes = cfg.ignore.map(globToRegex)
 const isIgnored = (f) => ignoreRes.some((re) => re.test(f))
 const approxTokens = (s) => Math.ceil(s.length / 4)
 
-// --- cost telemetry (pilot): prices in $/MTok, printed to the Actions log ---
+// --- cost telemetry (pilot): prices in $/MTok, printed to the Actions log and
+// tabled in the posted review ---
 // Keep this in sync with DEFAULTS above (anthropic_model / openai_model /
 // synth_model) -- consumer repos cannot set a model, so this file is the only place.
+// Cache reads default to a tenth of input; `cacheRead` overrides that fraction.
 const PRICES = {
-  'claude-opus-5-5': { in: 4, out: 20 },
+  'claude-opus-5-5': { in: 4, out: 20, cacheRead: 0.05 },
   'claude-opus-5': { in: 5, out: 25 },
   'claude-opus-4-8': { in: 5, out: 25 },
   'claude-sonnet-5': { in: 2, out: 10 },
@@ -216,11 +218,41 @@ const PRICES = {
   'gpt-5.4-2026-03-05': { in: 2.5, out: 15 },
   'gpt-5.6-terra': { in: 2.5, out: 15 },
 }
-let totalCost = 0
-const unpricedModels = new Set()
-function logUsage(label, model, inTok, outTok) {
+// Normalized to { input, cacheRead, output }: `input` excludes cached tokens.
+const anthropicUsage = (u) => ({
+  input: u?.input_tokens ?? 0,
+  cacheRead: u?.cache_read_input_tokens ?? 0,
+  output: u?.output_tokens ?? 0,
+})
+const openaiUsage = (u) => {
+  const cached = u?.input_tokens_details?.cached_tokens ?? 0
+  return {
+    input: (u?.input_tokens ?? 0) - cached,
+    cacheRead: cached,
+    output: u?.output_tokens ?? 0,
+  }
+}
+
+// Dollars for one call, or null when the model has no price.
+function costOf(model, usage) {
   const p = PRICES[model]
-  if (!p) {
+  if (!p) return null
+  return (
+    (usage.input * p.in +
+      usage.cacheRead * p.in * (p.cacheRead ?? 0.1) +
+      usage.output * p.out) /
+    1e6
+  )
+}
+
+const usageEntries = []
+const unpricedModels = new Set()
+const totalCost = () => usageEntries.reduce((s, e) => s + (e.cost ?? 0), 0)
+function logUsage(label, model, usage) {
+  const cost = costOf(model, usage)
+  usageEntries.push({ label, model, ...usage, cost })
+  const line = `${usage.input} in / ${usage.cacheRead} cached / ${usage.output} out`
+  if (cost == null) {
     // No price configured -- the cost estimate below excludes this model.
     if (!unpricedModels.has(model)) {
       unpricedModels.add(model)
@@ -229,16 +261,33 @@ function logUsage(label, model, inTok, outTok) {
           `from the total estimate -- add it to PRICES in review.mjs.`
       )
     }
-    console.log(
-      `[cost] ${label} (${model}): ${inTok} in / ${outTok} out ≈ $? (price unknown)`
-    )
+    console.log(`[cost] ${label} (${model}): ${line} ≈ $? (price unknown)`)
     return
   }
-  const cost = (inTok * p.in + outTok * p.out) / 1e6
-  totalCost += cost
-  console.log(
-    `[cost] ${label} (${model}): ${inTok} in / ${outTok} out ≈ $${cost.toFixed(4)}`
-  )
+  console.log(`[cost] ${label} (${model}): ${line} ≈ $${cost.toFixed(4)}`)
+}
+
+const unpricedNote = () =>
+  unpricedModels.size
+    ? ` (excludes unpriced model(s): ${[...unpricedModels].join(', ')})`
+    : ''
+
+// Markdown section for the posted review; every call made so far, one row each.
+function usageTable() {
+  if (!usageEntries.length) return []
+  const cost = (e) => (e.cost == null ? '?' : `$${e.cost.toFixed(4)}`)
+  return [
+    '',
+    '#### API usage',
+    '| Call | Model | In | Cached | Out | Cost |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...usageEntries.map(
+      (e) =>
+        `| ${e.label} | ${e.model} | ${e.input} | ${e.cacheRead} | ${e.output} | ${cost(e)} |`
+    ),
+    '',
+    `Total ~$${totalCost().toFixed(4)}${unpricedNote()}`,
+  ]
 }
 
 // ------------------------------------------------------------- get diff ----
@@ -425,13 +474,7 @@ async function claudeReview(diff, guidelines) {
   )
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  logUsage(
-    'reviewer-claude',
-    cfg.anthropic_model,
-    (data.usage?.input_tokens ?? 0) +
-      (data.usage?.cache_read_input_tokens ?? 0),
-    data.usage?.output_tokens ?? 0
-  )
+  logUsage('reviewer-claude', cfg.anthropic_model, anthropicUsage(data.usage))
   return parseReview(
     data.content
       .filter((b) => b.type === 'text')
@@ -468,12 +511,7 @@ async function codexReview(diff, guidelines) {
   })
   if (!res.ok) throw new Error(`OpenAI ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  logUsage(
-    'reviewer-codex',
-    cfg.openai_model,
-    data.usage?.input_tokens ?? 0,
-    data.usage?.output_tokens ?? 0
-  )
+  logUsage('reviewer-codex', cfg.openai_model, openaiUsage(data.usage))
   const text =
     (data.output ?? [])
       .flatMap((o) => o.content ?? [])
@@ -580,12 +618,7 @@ async function synthesizeWithAnthropic(model, reviewA, reviewB) {
   if (!res.ok)
     throw new Error(`Anthropic synth ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  logUsage(
-    'synthesizer',
-    model,
-    data.usage?.input_tokens ?? 0,
-    data.usage?.output_tokens ?? 0
-  )
+  logUsage('synthesizer', model, anthropicUsage(data.usage))
   return parseReview(
     data.content
       .filter((b) => b.type === 'text')
@@ -617,12 +650,7 @@ async function synthesizeWithOpenAI(model, reviewA, reviewB) {
   if (!res.ok)
     throw new Error(`OpenAI synth ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  logUsage(
-    'synthesizer',
-    model,
-    data.usage?.input_tokens ?? 0,
-    data.usage?.output_tokens ?? 0
-  )
+  logUsage('synthesizer', model, openaiUsage(data.usage))
   const text =
     (data.output ?? [])
       .flatMap((o) => o.content ?? [])
@@ -731,6 +759,7 @@ async function postReview(merged, meta) {
           ...unanchored.map(flatItem),
         ]
       : []),
+    ...usageTable(),
   ]
 
   // Findings ride along in the posted body so a later /ai-fix can read them back
@@ -918,8 +947,5 @@ console.log(
   `Done: ${merged.issues.length} merged issues, ${criticals.length} critical.`
 )
 console.log(
-  `[cost] TOTAL for this review ≈ $${totalCost.toFixed(4)}` +
-    (unpricedModels.size
-      ? ` (excludes unpriced model(s): ${[...unpricedModels].join(', ')})`
-      : '')
+  `[cost] TOTAL for this review ≈ $${totalCost().toFixed(4)}${unpricedNote()}`
 )
