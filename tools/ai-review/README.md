@@ -58,6 +58,10 @@ jobs:
 branch: merge the file first, then comment `/ai-review` on a PR. Merging early is inert -- the
 workflow does nothing until someone types the command.
 
+`@v1` is a moving tag. A consumer that wants immutability pins the commit SHA instead; the
+reusable workflow checks itself out at `job.workflow_sha` either way, and refuses to run if
+that is empty.
+
 Pass the two secrets explicitly. Do **not** use `secrets: inherit`: the reviewer has no business
 seeing an `NPM_TOKEN` or a database URL.
 

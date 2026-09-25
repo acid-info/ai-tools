@@ -36,11 +36,24 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
 
+      # An empty ref makes actions/checkout fall back to the default branch, silently running
+      # code the caller never pinned.
+      - name: Resolve the reviewer commit the caller pinned
+        env:
+          TOOL_REPO: ${{ job.workflow_repository }}
+          TOOL_SHA: ${{ job.workflow_sha }}
+        run: |
+          if [ -z "$TOOL_REPO" ] || [ -z "$TOOL_SHA" ]; then
+            echo "::error::Cannot tell which ai-review commit was called (job.workflow_*); refusing to run."
+            exit 1
+          fi
+          echo "Reviewer: $TOOL_REPO@$TOOL_SHA"
+
       - name: Checkout reviewer program at the ref the caller pinned
         uses: actions/checkout@v4
         with:
-          repository: acid-info/ai-review
-          ref: ${{ github.job_workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .ai-review-tool
 
       - uses: actions/setup-node@v4
