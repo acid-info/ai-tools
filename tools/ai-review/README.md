@@ -14,11 +14,13 @@ swapping a model is one edit here, not three edits across three repos.
    guideline files, and checks out this repo for `review.mjs`.
 3. The PR diff is fetched over the GitHub API by number. Lockfiles and generated paths are
    filtered out, and the rest is packed smallest-first into a token budget.
-4. Claude and Codex each review the diff. A cheap synthesis model deduplicates, marks issues both
-   models found, drops nits and sorts by severity.
+4. Claude and Codex each review the diff. A cheap synthesis model (`synth_model`, at
+   `synth_effort`) deduplicates, marks issues both models found, drops nits and sorts by
+   severity.
 5. Findings at or above the severity threshold are posted, anchored to diff lines where possible.
 
-If one provider is down the review degrades to a single model rather than failing. If synthesis
+If one provider is down the review degrades to a single model rather than failing. If that is
+`synth_model`'s provider, synthesis moves to the surviving reviewer's model. If synthesis
 fails it falls back to a local merge. Partial reviews say so in the posted body.
 
 `review.mjs` has **zero npm dependencies** and runs on Node 22's global `fetch`. Keep it that
@@ -96,7 +98,7 @@ guidelines_files:
   - CLAUDE.md
 ```
 
-Models, `min_severity_to_post` and `max_diff_tokens` are **owned centrally** in `DEFAULTS` in
+Models, `synth_effort`, `min_severity_to_post` and `max_diff_tokens` are **owned centrally** in `DEFAULTS` in
 `review.mjs`. Setting one in a repo config logs a warning and is ignored -- a repo that could
 pin its own model would put the tool back in three places.
 
@@ -114,9 +116,16 @@ Edit `DEFAULTS` in `review.mjs`, then check **two** other places in the same fil
 
 1. **`PRICES`** -- add the new model, or the cost line reports it as unpriced and excludes it
    from the total.
-2. **`EFFORT_MODELS`** -- a model-family regex gating `output_config.effort`. A model string that
-   does not match **silently loses the effort config** rather than erroring. Newer Claude models
-   need it; Haiku 4.5, Sonnet 4.5 and older reject it.
+2. **`EFFORT_MODELS`** / **`REASONING_MODELS`** -- model-family regexes gating
+   `output_config.effort` (Claude) and `reasoning.effort` (OpenAI). A model string that does not
+   match **silently loses the effort config** rather than erroring. Newer Claude models need it;
+   Haiku 4.5, Sonnet 4.5 and older reject it. Non-reasoning OpenAI models reject
+   `reasoning.effort`.
+
+`synth_model` picks its provider from its name: `claude-*` goes to Anthropic, anything else to
+OpenAI. `synth_effort` is sent in that provider's format. Keep it to a level both providers
+accept (`low`, `medium`, `high`): if `synth_model`'s provider is down, the same effort is sent to
+the other provider's reviewer model.
 
 Then tag: `git tag -f v1 && git push -f origin v1`. All three consumers pick it up on their next
 run -- no consumer edit.

@@ -72,15 +72,27 @@ const REVIEW_EFFORT = 'medium'
 // `output_config.effort` is rejected by Haiku 4.5, Sonnet 4.5 and older.
 const EFFORT_MODELS =
   /^claude-(fable-5|mythos-5|opus-(5|4-[5-8])|sonnet-(5|4-6))\b/
-const effortConfig = (model) =>
-  EFFORT_MODELS.test(model) ? { output_config: { effort: REVIEW_EFFORT } } : {}
+// `reasoning.effort` is only accepted by OpenAI reasoning models.
+const REASONING_MODELS = /^(gpt-[5-9]|o\d)\b/
+
+// Anything that is not a Claude model is sent to OpenAI.
+const isAnthropicModel = (model) => model.startsWith('claude-')
+
+// Request-body fragment carrying `effort` in the shape the model's provider
+// expects, or {} when the model does not accept one.
+function effortConfig(model, effort = REVIEW_EFFORT) {
+  if (isAnthropicModel(model))
+    return EFFORT_MODELS.test(model) ? { output_config: { effort } } : {}
+  return REASONING_MODELS.test(model) ? { reasoning: { effort } } : {}
+}
 
 // ---------------------------------------------------------------- config ---
 
 const DEFAULTS = {
   anthropic_model: 'claude-opus-5-5',
-  openai_model: 'gpt-5.6-terra',
-  synth_model: 'claude-haiku-4-5-20251001',
+  openai_model: 'gpt-6-sol',
+  synth_model: 'gpt-6-luna',
+  synth_effort: 'low',
   max_diff_tokens: 80_000, // hard budget cap
   min_severity_to_post: 'major', // "critical" | "major" | "minor"
   ignore: [
@@ -198,6 +210,8 @@ const PRICES = {
   'claude-opus-4-8': { in: 5, out: 25 },
   'claude-sonnet-5': { in: 2, out: 10 },
   'claude-haiku-4-5-20251001': { in: 1, out: 5 },
+  'gpt-6-sol': { in: 2, out: 10 },
+  'gpt-6-luna': { in: 0.1, out: 0.5 },
   'gpt-5.3-codex': { in: 1.75, out: 14 },
   'gpt-5.4-2026-03-05': { in: 2.5, out: 15 },
   'gpt-5.6-terra': { in: 2.5, out: 15 },
@@ -496,7 +510,7 @@ function parseReview(text, source, diag = {}) {
       if (/max_tokens|max_output_tokens|length/.test(String(diag.stopReason)))
         console.error(
           `[warn] the answer was cut off by the token budget -- raise MAX_RESPONSE_TOKENS ` +
-            `(currently ${MAX_RESPONSE_TOKENS}) or lower REVIEW_EFFORT in review.mjs.`
+            `(currently ${MAX_RESPONSE_TOKENS}) or lower REVIEW_EFFORT / synth_effort in review.mjs.`
         )
       if (diag.stopReason === 'refusal')
         console.error(
@@ -543,7 +557,7 @@ Respond with ONLY JSON:
 }`
 }
 
-async function synthesizeWithAnthropic(reviewA, reviewB) {
+async function synthesizeWithAnthropic(model, reviewA, reviewB) {
   const res = await fetch(
     `${API.anthropic.baseUrl}${API.anthropic.messagesPath}`,
     {
@@ -554,9 +568,9 @@ async function synthesizeWithAnthropic(reviewA, reviewB) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: cfg.synth_model,
+        model,
         max_tokens: MAX_RESPONSE_TOKENS,
-        ...effortConfig(cfg.synth_model),
+        ...effortConfig(model, cfg.synth_effort),
         messages: [
           { role: 'user', content: synthesisPrompt(reviewA, reviewB) },
         ],
@@ -568,7 +582,7 @@ async function synthesizeWithAnthropic(reviewA, reviewB) {
   const data = await res.json()
   logUsage(
     'synthesizer',
-    cfg.synth_model,
+    model,
     data.usage?.input_tokens ?? 0,
     data.usage?.output_tokens ?? 0
   )
@@ -581,14 +595,12 @@ async function synthesizeWithAnthropic(reviewA, reviewB) {
     {
       stopReason: data.stop_reason,
       outputTokens: data.usage?.output_tokens,
-      model: cfg.synth_model,
+      model,
     }
   )
 }
 
-// Used when the Anthropic API is down: reuse the OpenAI reviewer model for
-// synthesis -- it is cheap enough and known reachable, its review just succeeded.
-async function synthesizeWithOpenAI(reviewA, reviewB) {
+async function synthesizeWithOpenAI(model, reviewA, reviewB) {
   const res = await fetch(`${API.openai.baseUrl}${API.openai.responsesPath}`, {
     method: 'POST',
     headers: {
@@ -596,8 +608,9 @@ async function synthesizeWithOpenAI(reviewA, reviewB) {
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: cfg.openai_model,
+      model,
       max_output_tokens: MAX_RESPONSE_TOKENS,
+      ...effortConfig(model, cfg.synth_effort),
       input: [{ role: 'user', content: synthesisPrompt(reviewA, reviewB) }],
     }),
   })
@@ -606,7 +619,7 @@ async function synthesizeWithOpenAI(reviewA, reviewB) {
   const data = await res.json()
   logUsage(
     'synthesizer',
-    cfg.openai_model,
+    model,
     data.usage?.input_tokens ?? 0,
     data.usage?.output_tokens ?? 0
   )
@@ -621,7 +634,7 @@ async function synthesizeWithOpenAI(reviewA, reviewB) {
   return parseReview(text, 'synth', {
     stopReason: data.incomplete_details?.reason ?? data.status,
     outputTokens: data.usage?.output_tokens,
-    model: cfg.openai_model,
+    model,
   })
 }
 
@@ -666,12 +679,12 @@ async function postReview(merged, meta) {
   if (meta.claudeFailed)
     warnings.push(
       `⚠️ The ${cfg.anthropic_model} reviewer failed -- this is a single-model review ` +
-        `(${cfg.openai_model} reviewed and synthesized).`
+        `(${cfg.openai_model} only, synthesized by ${meta.synthModel}).`
     )
   if (meta.codexFailed)
     warnings.push(
       `⚠️ The ${cfg.openai_model} reviewer failed -- this is a single-model review ` +
-        `(${cfg.anthropic_model} only).`
+        `(${cfg.anthropic_model} only, synthesized by ${meta.synthModel}).`
     )
   if (meta.claudeUnparsed)
     warnings.push(
@@ -834,7 +847,7 @@ const reviewB = codexFailed
   : b.value
 
 // A reviewer that answers with unusable JSON still resolves, so `allSettled` above
-// can't see it. Separate from `claudeFailed`, which reroutes synthesis to OpenAI.
+// can't see it. Separate from `claudeFailed`/`codexFailed`, which reroute synthesis.
 const claudeUnparsed = reviewA.parseFailed === true
 const codexUnparsed = reviewB.parseFailed === true
 
@@ -845,15 +858,29 @@ const localMerge = () => ({
   summary: [reviewA.overall, reviewB.overall].filter(Boolean).join(' -- '),
 })
 
-// Synthesize on Anthropic normally; if the Claude reviewer failed, Anthropic is
-// presumed down, so synthesize on the surviving OpenAI provider instead. If the
+// Synthesize with synth_model on its own provider. If that provider's reviewer
+// failed, the provider is presumed down (or its key unset), so reuse the surviving
+// reviewer's model -- known reachable, its review just succeeded. If the
 // synthesizer itself fails, degrade to a local merge rather than losing the review.
+const synthOnAnthropic = isAnthropicModel(cfg.synth_model)
+const synthProviderDown = synthOnAnthropic ? claudeFailed : codexFailed
+const synthModel = !synthProviderDown
+  ? cfg.synth_model
+  : synthOnAnthropic
+    ? cfg.openai_model
+    : cfg.anthropic_model
+const synthEffortSent =
+  Object.keys(effortConfig(synthModel, cfg.synth_effort)).length > 0
+console.log(
+  `Synthesizing with ${synthModel} (effort: ${synthEffortSent ? cfg.synth_effort : 'not supported, omitted'})` +
+    (synthProviderDown ? ` -- fallback, ${cfg.synth_model}'s provider is down` : '')
+)
 let merged
 let synthFailed = false
 try {
-  merged = claudeFailed
-    ? await synthesizeWithOpenAI(reviewA, reviewB)
-    : await synthesizeWithAnthropic(reviewA, reviewB)
+  merged = isAnthropicModel(synthModel)
+    ? await synthesizeWithAnthropic(synthModel, reviewA, reviewB)
+    : await synthesizeWithOpenAI(synthModel, reviewA, reviewB)
   // An empty issue list would otherwise read as "nothing found".
   if (merged.parseFailed === true) {
     synthFailed = true
@@ -881,6 +908,7 @@ const criticals = await postReview(merged, {
   claudeUnparsed,
   codexUnparsed,
   synthFailed,
+  synthModel,
 })
 
 writeFileSync('critical-issues.json', JSON.stringify(criticals, null, 2))
