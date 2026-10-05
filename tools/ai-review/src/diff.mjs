@@ -1,4 +1,4 @@
-const approxTokens = (s) => Math.ceil(s.length / 4);
+import { approxTokens } from '#core/text.mjs';
 
 // New-file line numbers a review comment can anchor to (context + added lines).
 export function patchRightLines(patch) {
@@ -59,13 +59,6 @@ export function packFiles(files, { changedFiles, isIgnored, budget }) {
 }
 
 // The PR and every changed file from the listing API.
-export async function fetchPrFiles(gh, repo, prNumber) {
-  const pr = await gh(`/repos/${repo}/pulls/${prNumber}`);
-  const files = [];
-  for (let page = 1; ; page++) {
-    const batch = await gh(`/repos/${repo}/pulls/${prNumber}/files?per_page=100&page=${page}`);
-    files.push(...batch);
-    if (batch.length < 100) break;
-  }
-  return { pr, files };
+export async function fetchPrFiles({ gh, paginate }, repo, prNumber) {
+  return { pr: await gh(`/repos/${repo}/pulls/${prNumber}`), files: await paginate(`/repos/${repo}/pulls/${prNumber}/files`) };
 }

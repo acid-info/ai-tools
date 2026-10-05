@@ -1,14 +1,15 @@
-import { MAX_RESPONSE_TOKENS, REVIEW_EFFORT } from './config.mjs';
-import { isAnthropicModel } from './llm.mjs';
+import { isAnthropicModel } from '#core/models.mjs';
+
+import { MAX_RESPONSE_TOKENS, REVIEW_EFFORT, REVIEW_TIMEOUT_MS, SYNTH_TIMEOUT_MS } from './config.mjs';
 import { REVIEWER_SYSTEM, parseReview, reviewPrompt, synthesisPrompt } from './prompts.mjs';
 
 export const RANK = { critical: 3, major: 2, minor: 1, nit: 0 };
 
-// `call(label, model, { system, prompt, effort })` makes one model call and returns
-// { text, stopReason, outputTokens }.
+// `call(label, model, { system, prompt, effort, timeoutMs })` makes one model call and returns
+// { text, stopReason, usage }.
 async function reviewWith(call, label, source, model, diff, guidelines, warn) {
-  const r = await call(label, model, { system: REVIEWER_SYSTEM, prompt: reviewPrompt(diff, guidelines), effort: REVIEW_EFFORT });
-  return parseReview(r.text, source, { stopReason: r.stopReason, outputTokens: r.outputTokens, model, maxTokens: MAX_RESPONSE_TOKENS }, { warn });
+  const r = await call(label, model, { system: REVIEWER_SYSTEM, prompt: reviewPrompt(diff, guidelines), effort: REVIEW_EFFORT, timeoutMs: REVIEW_TIMEOUT_MS });
+  return parseReview(r.text, source, { stopReason: r.stopReason, outputTokens: r.usage?.output, model, maxTokens: MAX_RESPONSE_TOKENS }, { warn });
 }
 
 // Both reviewers in parallel; if ONE provider is down, degrade to a single-model review.
@@ -56,8 +57,8 @@ export function pickSynthModel(cfg, { claudeFailed, codexFailed }) {
 // losing the review.
 export async function synthesize({ call, cfg, model, reviewA, reviewB, warn = console.error }) {
   try {
-    const r = await call('synthesizer', model, { prompt: synthesisPrompt(reviewA, reviewB), effort: cfg.synth_effort });
-    const merged = parseReview(r.text, 'synth', { stopReason: r.stopReason, outputTokens: r.outputTokens, model, maxTokens: MAX_RESPONSE_TOKENS }, { warn });
+    const r = await call('synthesizer', model, { prompt: synthesisPrompt(reviewA, reviewB), effort: cfg.synth_effort, timeoutMs: SYNTH_TIMEOUT_MS });
+    const merged = parseReview(r.text, 'synth', { stopReason: r.stopReason, outputTokens: r.usage?.output, model, maxTokens: MAX_RESPONSE_TOKENS }, { warn });
     // An empty issue list would otherwise read as "nothing found".
     if (merged.parseFailed !== true) return { merged, synthFailed: false };
     warn('[warn] synthesis returned unparseable output; posting unmerged reviewer issues.');

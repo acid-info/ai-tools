@@ -1,3 +1,5 @@
+import { parseYamlSubset } from '#core/yaml.mjs';
+
 export const CONFIG_PATH = '.github/ai-review.yml';
 
 // Opus 5 and later think by default, and `max_tokens` caps thinking + response
@@ -5,6 +7,10 @@ export const CONFIG_PATH = '.github/ai-review.yml';
 // truncated. Above 16k the API wants streaming; `effort` bounds thinking's share.
 export const MAX_RESPONSE_TOKENS = 16_000;
 export const REVIEW_EFFORT = 'medium';
+
+// Per attempt. A reviewer can be retried once after an outage, and the job stops at 10 minutes.
+export const REVIEW_TIMEOUT_MS = 360_000;
+export const SYNTH_TIMEOUT_MS = 120_000;
 
 export const DEFAULTS = {
   anthropic_model: 'claude-opus-5-5',
@@ -35,50 +41,23 @@ export const DEFAULTS = {
 // override the model would put the tool back in three places.
 export const REPO_OVERRIDABLE = new Set(['ignore', 'extra_ignore', 'guidelines_files']);
 
-// Minimal YAML subset parser (key: value, and "- item" lists) to stay dep-free.
-// Only REPO_OVERRIDABLE keys are honoured; anything else is warned about and
-// ignored. `ignore` and `guidelines_files` fully REPLACE the DEFAULTS entry:
-// a config setting them must restate every default it wants to keep. Reach for
-// `extra_ignore` instead: it is appended to the defaults below.
+// Only REPO_OVERRIDABLE keys are honoured; anything else is warned about and ignored. Every one
+// is a list: `ignore` and `guidelines_files` REPLACE the DEFAULTS entry, so a config setting them
+// must restate every default it wants to keep; `extra_ignore` is appended to the defaults instead.
 export function loadConfig(text, { warn = () => {} } = {}) {
   const cfg = { ...DEFAULTS };
-  if (text == null) return cfg;
-  const unquote = (s) => s.trim().replace(/^(["'])(.*)\1$/, '$2');
-  let currentList = null;
-  for (const raw of text.split('\n')) {
-    const line = raw.replace(/#.*$/, '').trimEnd();
-    if (!line.trim()) continue;
-    // YAML allows block-sequence items at column 0, directly under their key.
-    const listItem = line.match(/^\s*-\s+(.*)$/);
-    if (listItem && currentList) {
-      cfg[currentList].push(unquote(listItem[1]));
-      continue;
-    }
-    const kv = line.match(/^([\w_]+):\s*(.*)$/);
-    if (!kv) continue;
-    const [, key, val] = kv;
+  for (const [key, val] of Object.entries(parseYamlSubset(text ?? ''))) {
     if (!REPO_OVERRIDABLE.has(key)) {
       warn(
         `${CONFIG_PATH}: "${key}" is owned centrally by acid-info/ai-tools and was ignored. ` +
           `Settable per repo: ${[...REPO_OVERRIDABLE].join(', ')}.`
       );
-      // A rejected key that opens a list would otherwise leave `currentList`
-      // pointing at the previous list, silently appending its items there.
-      currentList = null;
       continue;
     }
-    if (val === '') {
-      cfg[key] = [];
-      currentList = key;
-    } else {
-      // Every overridable key is a list: a bare string would later be spread
-      // into one-character globs, and "*" alone ignores every root-level file.
-      const scalar = unquote(val);
-      const flow = scalar.match(/^\[(.*)\]$/);
-      cfg[key] = flow ? flow[1].split(',').map(unquote).filter(Boolean) : [scalar];
-      currentList = null;
-    }
+    // A bare string would later be spread into one-character globs, and "*" alone ignores every
+    // root-level file.
+    cfg[key] = Array.isArray(val) ? val : [String(val)];
   }
-  cfg.ignore = [...cfg.ignore, ...(cfg.extra_ignore ?? [])];
+  cfg.ignore = [...cfg.ignore, ...cfg.extra_ignore];
   return cfg;
 }

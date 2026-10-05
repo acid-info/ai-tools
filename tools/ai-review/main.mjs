@@ -10,13 +10,16 @@
 
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 
+import { createGitHub } from '#core/github.mjs';
+import { loadGuidelines } from '#core/guidelines.mjs';
+import { effortConfig, isAnthropicModel } from '#core/models.mjs';
 import { makeMatcher } from '#core/paths.mjs';
+import { anthropicCall, openaiCall } from '#core/providers.mjs';
+import { approxTokens } from '#core/text.mjs';
+import { makeUsageLog, usageTable } from '#core/usage.mjs';
 
-import { CONFIG_PATH, loadConfig } from './src/config.mjs';
+import { CONFIG_PATH, MAX_RESPONSE_TOKENS, loadConfig } from './src/config.mjs';
 import { fetchPrFiles, packFiles } from './src/diff.mjs';
-import { createGitHub } from './src/github.mjs';
-import { loadGuidelines } from './src/guidelines.mjs';
-import { callModel, effortConfig, isAnthropicModel, makeUsageLog } from './src/llm.mjs';
 import { renderReview, renderUnreviewable } from './src/post.mjs';
 import { pickSynthModel, runReviewers, synthesize } from './src/review.mjs';
 
@@ -25,7 +28,8 @@ const { GITHUB_TOKEN, ANTHROPIC_API_KEY, OPENAI_API_KEY, REPO, PR_NUMBER, GITHUB
 // When truthy ("1", "true", "yes"), reviewers run without any guideline files.
 const skipGuidelines = /^(1|true|yes)$/i.test(SKIP_GUIDELINES ?? '');
 
-const approxTokens = (s) => Math.ceil(s.length / 4);
+const log = (m) => console.log(m);
+const warn = (m) => console.warn(`[warn] ${m}`);
 
 async function main() {
   const missingEnv = [
@@ -41,12 +45,12 @@ async function main() {
     process.exit(1);
   }
 
-  const cfg = loadConfig(existsSync(CONFIG_PATH) ? readFileSync(CONFIG_PATH, 'utf8') : null, { warn: (m) => console.warn(`[warn] ${m}`) });
+  const cfg = loadConfig(existsSync(CONFIG_PATH) ? readFileSync(CONFIG_PATH, 'utf8') : null, { warn });
   const isIgnored = makeMatcher(cfg.ignore);
-  const gh = createGitHub(GITHUB_TOKEN);
-  const usage = makeUsageLog();
+  const { request: gh, paginate } = createGitHub({ token: GITHUB_TOKEN, onRetry: warn });
+  const usage = makeUsageLog(log, warn);
 
-  const { pr, files: listed } = await fetchPrFiles(gh, REPO, PR_NUMBER);
+  const { pr, files: listed } = await fetchPrFiles({ gh, paginate }, REPO, PR_NUMBER);
   const packed = packFiles(listed, { changedFiles: pr.changed_files, isIgnored, budget: cfg.max_diff_tokens });
   const { diff, files, fileCount, skipped, noPatch, omitted, unlisted, validLines } = packed;
 
@@ -56,7 +60,7 @@ async function main() {
       console.log('\n===== DRY RUN -- comment that WOULD be posted =====\n');
       console.log(body);
     } else {
-      await gh(`/repos/${REPO}/issues/${PR_NUMBER}/comments`, { method: 'POST', body: JSON.stringify({ body }) });
+      await gh(`/repos/${REPO}/issues/${PR_NUMBER}/comments`, { method: 'POST', body: { body } });
     }
     if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, 'criticals=0\n');
     return;
@@ -67,11 +71,22 @@ async function main() {
   );
 
   if (skipGuidelines) console.log('Guideline files disabled via SKIP_GUIDELINES.');
-  const guidelines = skipGuidelines ? '' : loadGuidelines(cfg.guidelines_files, files);
+  const readFile = (f) => readFileSync(f, 'utf8');
+  const guidelines = skipGuidelines ? '' : loadGuidelines(cfg.guidelines_files, process.cwd(), files, readFile, { log, warn }).text;
 
-  const call = async (label, model, { system, prompt, effort }) => {
-    const apiKey = isAnthropicModel(model) ? ANTHROPIC_API_KEY : OPENAI_API_KEY;
-    const r = await callModel({ model, apiKey, system, prompt, effort });
+  const call = async (label, model, { system, prompt, effort, timeoutMs }) => {
+    const anthropic = isAnthropicModel(model);
+    const r = await (anthropic ? anthropicCall : openaiCall)({
+      fetch,
+      apiKey: anthropic ? ANTHROPIC_API_KEY : OPENAI_API_KEY,
+      model,
+      system,
+      blocks: [{ text: prompt }],
+      maxTokens: MAX_RESPONSE_TOKENS,
+      effort,
+      timeoutMs,
+      retry: { onRetry: (m) => warn(`${label}: ${m}`) },
+    });
     usage.log(label, model, r.usage);
     return r;
   };
@@ -88,7 +103,7 @@ async function main() {
   const review = renderReview(
     merged,
     { skipped, noPatch, omitted, unlisted, validLines, ...reviews, synthFailed, synthModel },
-    { cfg, prNumber: PR_NUMBER, usage: usage.table() }
+    { cfg, prNumber: PR_NUMBER, usage: ['', '#### API usage', ...usageTable({ entries: usage.entries, total: usage.total(), unpriced: usage.unpriced() })] }
   );
 
   if (DRY_RUN) {
@@ -99,12 +114,12 @@ async function main() {
     try {
       await gh(`/repos/${REPO}/pulls/${PR_NUMBER}/reviews`, {
         method: 'POST',
-        body: JSON.stringify({ event: 'COMMENT', body: review.body, comments: review.comments }),
+        body: { event: 'COMMENT', body: review.body, comments: review.comments },
       });
     } catch (e) {
       // Inline anchors can fail if a model hallucinated a line number: fall back to summary-only.
       console.error(`[warn] inline review failed (${e.message}); posting summary + list instead.`);
-      await gh(`/repos/${REPO}/issues/${PR_NUMBER}/comments`, { method: 'POST', body: JSON.stringify({ body: review.flatBody() }) });
+      await gh(`/repos/${REPO}/issues/${PR_NUMBER}/comments`, { method: 'POST', body: { body: review.flatBody() } });
     }
   }
 
@@ -112,7 +127,8 @@ async function main() {
   writeFileSync('critical-issues.json', JSON.stringify(criticals, null, 2));
   if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `criticals=${criticals.length}\n`);
   console.log(`Done: ${merged.issues.length} merged issues, ${criticals.length} critical.`);
-  console.log(`[cost] TOTAL for this review ≈ $${usage.total().toFixed(4)}${usage.unpricedNote()}`);
+  const unpriced = usage.unpriced();
+  console.log(`[cost] TOTAL for this review ≈ $${usage.total().toFixed(4)}` + (unpriced.length ? ` (excludes unpriced model(s): ${unpriced.join(', ')})` : ''));
 }
 
 main().catch((err) => {

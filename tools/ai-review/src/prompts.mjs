@@ -1,3 +1,5 @@
+import { parseJsonObject } from '#core/text.mjs';
+
 export const REVIEWER_SYSTEM = 'You are a rigorous senior code reviewer. You output only valid JSON.';
 
 const REVIEW_SCHEMA = `Respond with ONLY a JSON object, no markdown fences, matching:
@@ -64,35 +66,22 @@ Respond with ONLY JSON:
 
 // `diag` separates a truncated answer from a refusal from malformed output.
 export function parseReview(text, source, diag = {}, { warn = console.error } = {}) {
-  // Only an outer fence: fences inside string values are code in `suggested_fix`.
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, '')
-    .replace(/\s*```$/, '')
-    .trim();
-  // Direct parse first; brace-slicing is only a fallback for prose-wrapped JSON.
-  let parsed;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    try {
-      parsed = JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
-    } catch {
+  const parsed = parseJsonObject(text);
+  if (!parsed) {
+    warn(
+      `[warn] ${source} returned unparseable output; treating as empty review. ` +
+        `(model=${diag.model ?? '?'}, stop_reason=${diag.stopReason ?? '?'}, ` +
+        `output_tokens=${diag.outputTokens ?? '?'}, text_length=${text.length})`
+    );
+    if (/max_tokens|max_output_tokens|length/.test(String(diag.stopReason)))
       warn(
-        `[warn] ${source} returned unparseable output; treating as empty review. ` +
-          `(model=${diag.model ?? '?'}, stop_reason=${diag.stopReason ?? '?'}, ` +
-          `output_tokens=${diag.outputTokens ?? '?'}, text_length=${text.length})`
+        `[warn] the answer was cut off by the token budget -- raise MAX_RESPONSE_TOKENS ` +
+          `(currently ${diag.maxTokens ?? '?'}) or lower REVIEW_EFFORT / synth_effort in tools/ai-review/src/config.mjs.`
       );
-      if (/max_tokens|max_output_tokens|length/.test(String(diag.stopReason)))
-        warn(
-          `[warn] the answer was cut off by the token budget -- raise MAX_RESPONSE_TOKENS ` +
-            `(currently ${diag.maxTokens ?? '?'}) or lower REVIEW_EFFORT / synth_effort in tools/ai-review/src/config.mjs.`
-        );
-      if (diag.stopReason === 'refusal') warn(`[warn] the model declined this request; no review was produced.`);
-      warn(text.trim() ? `[warn] ${source} raw output (first 300 chars): ${text.slice(0, 300)}` : `[warn] ${source} returned no text content at all.`);
-      // Non-enumerable: the synthesis prompt JSON.stringify()s these objects.
-      return Object.defineProperty({ issues: [], overall: `(${source} output could not be parsed)` }, 'parseFailed', { value: true });
-    }
+    if (diag.stopReason === 'refusal') warn(`[warn] the model declined this request; no review was produced.`);
+    warn(text.trim() ? `[warn] ${source} raw output (first 300 chars): ${text.slice(0, 300)}` : `[warn] ${source} returned no text content at all.`);
+    // Non-enumerable: the synthesis prompt JSON.stringify()s these objects.
+    return Object.defineProperty({ issues: [], overall: `(${source} output could not be parsed)` }, 'parseFailed', { value: true });
   }
   parsed.issues = (parsed.issues ?? []).map((i) => ({ ...i, source }));
   return parsed;
