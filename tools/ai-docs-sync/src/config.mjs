@@ -70,7 +70,7 @@ export function loadConfig(text, { warn = () => {} } = {}) {
     }
     if (!REPO_OVERRIDABLE.has(key)) {
       warn(
-        `.github/docs-sync.yml: "${key}" is owned centrally by acid-info/ai-docs-sync and was ignored. ` +
+        `.github/docs-sync.yml: "${key}" is owned centrally by acid-info/ai-tools and was ignored. ` +
           `Settable per repo: ${[...REPO_OVERRIDABLE].join(', ')}.`
       );
       continue;
