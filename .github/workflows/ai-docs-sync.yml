@@ -82,7 +82,7 @@ jobs:
         uses: actions/setup-node@v4
         with: { node-version: 22 }
       - if: steps.target.outputs.skip != '1'
-        run: node .ai-tools/tools/ai-docs-sync/docs-sync.mjs
+        run: node .ai-tools/tools/ai-docs-sync/main.mjs
         env:
           GITHUB_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN || github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

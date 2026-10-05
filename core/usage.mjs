@@ -37,3 +37,6 @@ export function usageTable({ entries, total, unpriced }, { label = (s) => s } = 
     `Total ~$${total.toFixed(4)}` + (unpriced.length ? ` (excludes unpriced: ${unpriced.join(', ')})` : ''),
   ];
 }
+
+export const costLine = (usage) =>
+  `[cost] TOTAL ~$${usage.total().toFixed(4)}` + (usage.unpriced().length ? ` (excludes unpriced model(s): ${usage.unpriced().join(', ')})` : '');
