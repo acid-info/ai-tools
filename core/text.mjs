@@ -14,3 +14,22 @@ export async function mapConcurrent(items, limit, fn) {
   return results;
 }
 
+
+// The first JSON object in a model's answer, or null. Only an outer fence is stripped: fences
+// inside string values are content (a suggested fix, a code sample).
+export function parseJsonObject(text) {
+  const cleaned = String(text ?? '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    try {
+      return JSON.parse(cleaned.slice(cleaned.indexOf('{'), cleaned.lastIndexOf('}') + 1));
+    } catch {
+      return null;
+    }
+  }
+}

@@ -66,9 +66,9 @@ export async function openaiCall({ fetch: f, apiKey, model, system, blocks, maxT
       body: JSON.stringify({
         model,
         max_output_tokens: maxTokens,
-        ...(effort ? { reasoning: { effort } } : {}),
+        ...effortConfig(model, effort),
         input: [
-          { role: 'system', content: system },
+          ...(system ? [{ role: 'system', content: system }] : []),
           { role: 'user', content: blocks.map((b) => b.text).join('\n\n') },
         ],
       }),

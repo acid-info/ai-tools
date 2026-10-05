@@ -1,5 +1,6 @@
 import { API } from '#core/api.mjs';
 import { codeBlock, defuse, inlineCode } from '#core/markdown.mjs';
+import { usageTable } from '#core/usage.mjs';
 
 import { BANNER_DIFF_MAX, PR_BODY_MAX } from './config.mjs';
 import { renderMarker, short7 } from './publish.mjs';
@@ -182,14 +183,7 @@ export function renderPrBody({
     g.pr ? `- #${g.pr.number} ${defuse(g.pr.title, 200)}` : '- Commits not from a PR',
     ...g.commits.map((c) => `  - \`${short7(c.short)}\` ${defuse(c.subject, 200)}`),
   ]);
-  const cost = (e) => (e.cost == null ? '?' : `$${e.cost.toFixed(4)}`);
-  const tail = sec('API usage', [
-    '| Call | Model | In | Cached | Out | Cost |',
-    '| --- | --- | --- | --- | --- | --- |',
-    ...usage.entries.map((e) => `| ${defuse(e.label, 120)} | ${e.model} | ${e.input} | ${e.cacheRead} | ${e.output} | ${cost(e)} |`),
-    '',
-    `Total ~$${usage.total.toFixed(4)}` + (usage.unpriced.length ? ` (excludes unpriced: ${usage.unpriced.join(', ')})` : ''),
-  ]).join('\n');
+  const tail = sec('API usage', usageTable(usage, { label: (l) => defuse(l, 120) })).join('\n');
 
   const marker = renderMarker(runs);
   const budget = maxChars - marker.length - 200;

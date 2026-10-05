@@ -25,3 +25,15 @@ export function makeUsageLog(log = () => {}, warn = () => {}) {
     unpriced: () => [...unpriced],
   };
 }
+
+// The API usage table for a GitHub post, as Markdown lines. `label` escapes a call label.
+export function usageTable({ entries, total, unpriced }, { label = (s) => s } = {}) {
+  const cost = (e) => (e.cost == null ? '?' : `$${e.cost.toFixed(4)}`);
+  return [
+    '| Call | Model | In | Cached | Out | Cost |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...entries.map((e) => `| ${label(e.label)} | ${e.model} | ${e.input} | ${e.cacheRead} | ${e.output} | ${cost(e)} |`),
+    '',
+    `Total ~$${total.toFixed(4)}` + (unpriced.length ? ` (excludes unpriced: ${unpriced.join(', ')})` : ''),
+  ];
+}

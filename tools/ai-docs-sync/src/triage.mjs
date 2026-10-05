@@ -1,6 +1,9 @@
 import { canonicalise } from '#core/paths.mjs';
+import { parseJsonObject } from '#core/text.mjs';
 
-import { UNTRUSTED, cleanList, parseJsonObject } from './prompting.mjs';
+import { UNTRUSTED } from './prompting.mjs';
+
+const cleanList = (v) => (Array.isArray(v) ? v.filter((s) => typeof s === 'string') : []);
 
 export const TRIAGE_SYSTEM = `You decide which documentation files a code change invalidates. You are given the change
 narrative (commit and PR messages: why the code changed), the code diff (what changed), a
