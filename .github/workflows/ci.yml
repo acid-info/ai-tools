@@ -12,5 +12,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Three repos run this file straight from a tag -- a syntax error would break all of them.
-      - run: node --check review.mjs
+      # Consumers run these files straight from a tag: a syntax error breaks every one of them.
+      - run: npm run check
+      - run: npm test

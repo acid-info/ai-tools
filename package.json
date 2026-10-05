@@ -1,0 +1,13 @@
+{
+  "name": "ai-tools",
+  "private": true,
+  "description": "AI workflows for GitHub, shipped as reusable workflows. No dependencies, no build step.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "check": "git ls-files -z '*.mjs' | xargs -0 -n1 node --check",
+    "test": "node --test"
+  }
+}

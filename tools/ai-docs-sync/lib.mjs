@@ -88,9 +88,9 @@ export const BUILT_IN_IGNORE = [
   '**/*.generated.*',
 ];
 
-// Never writable, whatever doc_paths says. `.ai-docs-sync/` is where the workflow checks out this
+// Never writable, whatever doc_paths says. `.ai-tools/` is where the workflow checks out this
 // tool inside the consumer's tree.
-export const DENYLIST = ['.github/**', '.git/**', '**/node_modules/**', '.ai-docs-sync/**'];
+export const DENYLIST = ['.github/**', '.git/**', '**/node_modules/**', '.ai-tools/**'];
 
 // $/MTok. Cache reads default to a tenth of input; `cacheRead` overrides that fraction.
 // Cache writes are 1.25x input. Opus 5.5 reads are 5% ($0.20); its 5-minute writes stay at 1.25x.

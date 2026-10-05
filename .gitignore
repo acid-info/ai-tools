@@ -1,3 +1,5 @@
 .env
 node_modules
 critical-issues.json
+PLAN.md
+plans/

@@ -232,7 +232,7 @@ describe('allowlist predicate', () => {
     assert.equal(ok('docs/../../x.md'), false);
     assert.equal(ok('docs/./x.md'), false);
     const broad = makeIsEditableDocPath(loadConfig('doc_paths:\n  - "**/*.md"\n'));
-    assert.equal(broad('.ai-docs-sync/README.md'), false, "the tool's own checkout in the consumer tree");
+    assert.equal(broad('.ai-tools/README.md'), false, "the tool's own checkout in the consumer tree");
     assert.equal(broad('docs/x.md'), true);
   });
 
