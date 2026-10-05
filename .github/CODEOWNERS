@@ -1,8 +1,0 @@
-# Owners must approve changes to the paths below once master requires code owner review.
-# core/ runs inside every tool, writers included, so it is owned like a writer.
-# Replace the placeholder teams, then uncomment.
-#
-# *                    @acid-info/ai-tools-maintainers
-# /core/               @acid-info/ai-tools-writers
-# /tools/ai-docs-sync/ @acid-info/ai-tools-writers
-# /.github/            @acid-info/ai-tools-writers

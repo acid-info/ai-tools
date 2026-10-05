@@ -79,16 +79,12 @@ Whoever can move a tool's tag runs code in every consumer repo with that repo's 
 API keys; for a writer, that includes `contents: write`. One shared tag would let anyone trusted
 to release a reader turn it into a writer everywhere, which is why every tool has its own tag.
 
-Before production consumers switch to this repo, a repo admin sets up:
+`master` and `develop` are protected by the repository ruleset "Protect master and develop":
+changes land only through a pull request, force pushes and branch deletion are blocked, and only
+repo admins can bypass it to push directly.
 
-1. **Tag rulesets** (Settings, Rules, Rulesets, target "Tags"), one per pattern:
-   `ai-review/*` for the reader maintainers, `ai-docs-sync/*` (and every future writer's pattern)
-   for the smaller writer group. Block creation, update and deletion for everyone else.
-2. **A branch ruleset on `master`** requiring a pull request with code owner review.
-3. **`.github/CODEOWNERS`** with real owners: `core/` and every writer tool owned by the writer
-   group, since `core/` code runs inside the writers. The file holds a commented template.
-
-Until then anyone with push access can move any tag, which is weaker than the old two-repo split.
+The ruleset covers branches, not tags. Anyone with write access can still create or move a tool's
+tag, so releasing is restricted only by who has write access to this repo.
 
 Per tool:
 
@@ -107,8 +103,7 @@ Per tool:
    `sparse-checkout: core tools/<tool>`, and runs `main.mjs`. Copy the closest existing one.
 3. Consumer config, if any, at `.github/<tool>.yml`, parsed with `#core/yaml.mjs`. Only the keys
    the tool lists as repo-overridable are honoured; models and budgets stay in the tool.
-4. Decide reader or writer, add the tag pattern to the matching ruleset and, for a writer,
-   the tool to `CODEOWNERS`.
+4. Decide reader or writer and say so in the tool table above.
 5. Prove it end to end from a sandbox repo before tagging `<tool>/v1`.
 
 ## Migration status

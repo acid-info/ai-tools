@@ -320,8 +320,8 @@ Then release it (below). Every consumer picks it up on its next run.
 git checkout master && git pull && git tag -f ai-docs-sync/v1 && git push -f origin ai-docs-sync/v1
 ```
 
-Only the writer-tools group may push this tag (see [Security model](../../README.md#security-model)).
-Consumers that want immutability pin a commit SHA instead.
+See [Security model](../../README.md#security-model) for who can push it. Consumers that want
+immutability pin a commit SHA instead.
 
 ## Running it locally
 
