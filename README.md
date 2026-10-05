@@ -63,7 +63,8 @@ export. `node --check` alone cannot see that, and consumers run these files stra
 
 ## Releasing
 
-Each tool has its own moving major tag, `<tool>/v1`. After a change is merged to `master`:
+Each tool has its own moving major tag, `<tool>/v1`, and only repo admins can move it. After a
+change is merged to `master`:
 
 ```bash
 git checkout master && git pull && git tag -f ai-review/v1 && git push -f origin ai-review/v1
@@ -79,12 +80,12 @@ Whoever can move a tool's tag runs code in every consumer repo with that repo's 
 API keys; for a writer, that includes `contents: write`. One shared tag would let anyone trusted
 to release a reader turn it into a writer everywhere, which is why every tool has its own tag.
 
-`master` and `develop` are protected by the repository ruleset "Protect master and develop":
-changes land only through a pull request, force pushes and branch deletion are blocked, and only
-repo admins can bypass it to push directly.
+Two repository rulesets enforce this, and repo admins can bypass both:
 
-The ruleset covers branches, not tags. Anyone with write access can still create or move a tool's
-tag, so releasing is restricted only by who has write access to this repo.
+- **Protect master and develop**: changes to `master` and `develop` land only through a pull
+  request, and neither branch can be deleted. Admins can push directly.
+- **Only admins push tags**: creating, moving or deleting any tag is admin-only, so only admins
+  can release a tool.
 
 Per tool:
 
