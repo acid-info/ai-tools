@@ -7,13 +7,13 @@ model check the result, runs mechanical gates, and maintains a single rolling pu
 it.
 Humans merge it.
 
-Consumers call this repo as a **reusable workflow** pinned to `@v1`. Upgrading the tool or
-swapping a model is one edit here, not one per consumer.
+Consumers call it as a **reusable workflow** from
+[acid-info/ai-tools](../../README.md), pinned to the `ai-docs-sync/v1` tag. Upgrading the tool
+or swapping a model is one edit there, not one per consumer.
 
-> **Status: feature-complete, not yet tagged.** Every stage is implemented and unit-tested,
-> and publishing has been run end to end against a sandbox repo from a local checkout. It has
-> not yet run inside GitHub Actions. Do not add it to a repo until `v1` is tagged (see
-> "Releasing").
+> **Status: feature-complete.** Every stage is implemented and unit-tested, and the tool has run
+> end to end inside GitHub Actions against a sandbox repo: opening and updating the rolling PR,
+> carrying edits forward, the loop guard, dry runs and reviewer deletes.
 
 ## How it works
 
@@ -56,15 +56,15 @@ edits unchecked, and the writer: a failed call holds back only that doc, unless 
 succeeded and at least one failure was an outage (a 5xx, 429, 529 or network error) rather than
 something about the request (a 400, a timeout).
 
-The tool has **zero npm dependencies** and runs on Node 22's global `fetch`. Keep it that way:
-no build step, no `package.json`.
+The tool has **zero npm dependencies** and runs on Node 22's global `fetch`, with no build step.
+Keep it that way.
 
 ## Adding it to a repo
 
-Create `.github/workflows/docs-sync.yml` on your **default branch**:
+Create `.github/workflows/ai-docs-sync.yml` on your **default branch**:
 
 ```yaml
-# AI docs sync. The tool lives in acid-info/ai-docs-sync -- edit it there.
+# AI docs sync. The tool lives in acid-info/ai-tools (tools/ai-docs-sync); edit it there.
 # Runs on every push to the target branch and maintains one rolling docs PR.
 name: AI Docs Sync
 
@@ -90,7 +90,7 @@ permissions:
 
 jobs:
   sync:
-    uses: acid-info/ai-docs-sync/.github/workflows/docs-sync.yml@v1
+    uses: acid-info/ai-tools/.github/workflows/ai-docs-sync.yml@ai-docs-sync/v1
     with:
       # Optional. Forces the target branch. Omitted: `develop` if it exists, else the default
       # branch. Lives here rather than in .github/docs-sync.yml because the config file is read
@@ -112,7 +112,7 @@ to end by temporarily listing a feature branch under `branches:`.
 Pass the secrets explicitly. Do **not** use `secrets: inherit`: the tool has no business seeing
 an `NPM_TOKEN` or a database URL.
 
-`@v1` is a moving tag. A consumer that wants immutability pins the commit SHA instead; the
+`ai-docs-sync/v1` is a moving tag. A consumer that wants immutability pins the commit SHA instead; the
 reusable workflow checks itself out at `job.workflow_sha` either way, and refuses to run if
 that is empty.
 
@@ -181,7 +181,7 @@ guidelines_files:
 ```
 
 Models, effort, token budgets and severity thresholds are **owned centrally** in `DEFAULTS` in
-`lib.mjs`. Setting one in a repo config logs a warning and is ignored: a repo that could pin its
+`src/config.mjs`. Setting one in a repo config logs a warning and is ignored: a repo that could pin its
 own model would put the tool back in N places.
 
 Built-in ignores cover lockfiles, `*.min.js`, `*.map`, `dist/`, `vendor/`, `__snapshots__/` and
@@ -301,36 +301,37 @@ To re-process a range without touching the cursor first, dispatch the workflow w
 
 ## Changing a model
 
-Edit `DEFAULTS` in `lib.mjs`, then check **two** other places in the same file:
+Edit `DEFAULTS` in `src/config.mjs`, then check **two** places in `core/models.mjs`, which every
+tool shares:
 
 1. **`PRICES`**: add the new model, or the cost line reports it as unpriced and excludes it from
    the total.
-2. **`EFFORT_MODELS`**: a model-family regex gating Anthropic `output_config.effort`. A Claude
-   model string that does not match silently loses the effort config rather than erroring.
-   OpenAI calls send `reasoning.effort` whenever the stage has an effort set.
+2. **`EFFORT_MODELS`** / **`REASONING_MODELS`**: model-family regexes gating Anthropic
+   `output_config.effort` and OpenAI `reasoning.effort`. A model string that does not match
+   silently loses the effort config rather than erroring.
 
 Then release it (below). Every consumer picks it up on its next run.
 
 ## Releasing
 
-`v1` is a moving tag on `master`. After a change is merged:
+`ai-docs-sync/v1` is a moving tag on `master` of acid-info/ai-tools. After a change is merged:
 
 ```bash
-git checkout master && git pull && git tag -f v1 && git push -f origin v1
+git checkout master && git pull && git tag -f ai-docs-sync/v1 && git push -f origin ai-docs-sync/v1
 ```
 
-Only the group that controls `ai-review`'s tags should be able to push this one (see "Security
-model"). Consumers that want immutability pin a commit SHA instead.
+Only the writer-tools group may push this tag (see [Security model](../../README.md#security-model)).
+Consumers that want immutability pin a commit SHA instead.
 
 ## Running it locally
 
 ```bash
-node --check docs-sync.mjs && node --check lib.mjs && node --test 'test/**/*.test.mjs'
+npm run check && npm test
 ```
 
-That is what CI runs. `test/` imports `lib.mjs` only; `lib.mjs` has no side effects at import
-time and never reads `process.env` or touches the network. `docs-sync.mjs` is the only file that
-does.
+Run from the repo root; that is what CI runs. Every module in `src/` except `runtime.mjs` and
+`stages/` is pure: no `process.env`, no network, no side effects at import time, so `test/`
+imports them directly. `main.mjs` is the only file that reads the env.
 
 To run the tool itself, `cd` into a full clone of the consumer repo checked out at its target
 branch; the config is read from `.github/docs-sync.yml` there. Fetch first, so the
@@ -343,7 +344,7 @@ git fetch origin && git checkout --detach origin/develop
 
 ```bash
 GITHUB_TOKEN=$(gh auth token) REPO=owner/name TARGET_BRANCH=develop SINCE=<sha> \
-  ANTHROPIC_API_KEY=sk-ant-junk OPENAI_API_KEY=sk-junk TRIAGE_ONLY=1 node /path/to/ai-docs-sync/docs-sync.mjs
+  ANTHROPIC_API_KEY=sk-ant-junk OPENAI_API_KEY=sk-junk TRIAGE_ONLY=1 node /path/to/ai-tools/tools/ai-docs-sync/main.mjs
 ```
 
 > **Only `TRIAGE_ONLY=1` writes nothing.** Every other run writes to the real repo as soon as
@@ -408,10 +409,32 @@ dispatched directly. End-to-end changes have to be proved on a real push in a co
 - `@mentions` and issue-closing keywords in anything model- or narrative-derived are defused
   before posting.
 
-**Whoever can push the `v1` tag executes code with `contents: write` in every consumer repo.**
-This is a separate repo from `ai-review` for that reason: sharing a tag between a reader and a
-writer would let whoever can push it turn a reviewer into a writer everywhere. Restrict tag
-pushes here to the same group that controls `ai-review`; consumers that want more pin a SHA.
+**Whoever can push the `ai-docs-sync/v1` tag executes code with `contents: write` in every
+consumer repo.** It is a separate tag from `ai-review/v1` for that reason: sharing a tag between
+a reader and a writer would let whoever can push it turn a reviewer into a writer everywhere.
+`core/` runs inside this tool too, so changes there need the same review. See
+[Security model](../../README.md#security-model); consumers that want more pin a SHA.
+
+## Code layout
+
+| Path | Role |
+| --- | --- |
+| `main.mjs` | Entry point: reads the env, loads config, runs the stages in order. |
+| `src/runtime.mjs` | Every side effect: git, the checkout on disk, GitHub, the model APIs. |
+| `src/stages/` | The pipeline, one module per step: `pick-range`, `read-changes`, `carry-forward`, `read-docs`, `triage-docs`, `write-docs`, `check-docs`, `gate-docs`, `report`, `publish`. Each reads what it needs from one shared context and returns what later stages use. |
+| `src/config.mjs` | `DEFAULTS`, repo-overridable keys, the denylist and `.github/docs-sync.yml` parsing. |
+| `src/allowlist.mjs` | Which paths are editable docs. |
+| `src/git.mjs`, `src/range.mjs` | Git log and diff parsing, range selection, diff packing. |
+| `src/narrative.mjs` | PR lookup and the change narrative fed to the models. |
+| `src/carry.mjs` | Carrying rolling-branch edits forward and reviewer decisions. |
+| `src/manifest.mjs`, `src/links.mjs` | The doc manifest and relative-link handling. |
+| `src/plan.mjs` | Delete, create and link-fix planning after triage. |
+| `src/triage.mjs`, `src/writer.mjs`, `src/checker.mjs` | Each model stage's prompt, input builder and output parser. |
+| `src/gates.mjs`, `src/linediff.mjs` | The mechanical gates and the line diff they use. |
+| `src/publish.mjs`, `src/pr-body.mjs` | Commit message, PR marker and PR body. |
+
+Model calls, retries, pricing, GitHub access, globs, YAML and guideline loading come from
+`core/`.
 
 ## License
 
