@@ -71,4 +71,4 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.issue.number }}
-        run: node .ai-tools/tools/ai-review/review.mjs
+        run: node .ai-tools/tools/ai-review/main.mjs
