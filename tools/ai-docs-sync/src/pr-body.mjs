@@ -1,6 +1,7 @@
-import { API } from './api.mjs';
+import { API } from '#core/api.mjs';
+import { codeBlock, defuse, inlineCode } from '#core/markdown.mjs';
+
 import { BANNER_DIFF_MAX, PR_BODY_MAX } from './config.mjs';
-import { codeBlock, defuse, inlineCode } from './markdown.mjs';
 import { renderMarker, short7 } from './publish.mjs';
 
 function checkerLines(k, notes = true) {

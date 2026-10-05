@@ -1,9 +1,10 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { globToRegex } from '#core/paths.mjs';
+
 import { makeIsEditableDocPath } from '../src/allowlist.mjs';
 import { parseNameStatus, splitUnifiedDiff } from '../src/git.mjs';
-import { globToRegex } from '../src/paths.mjs';
 import { classifyChanges, packDiff, selectRange } from '../src/range.mjs';
 import { cfg } from './helpers.mjs';
 

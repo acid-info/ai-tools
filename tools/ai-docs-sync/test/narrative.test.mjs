@@ -1,9 +1,10 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { approxTokens } from '#core/text.mjs';
+
 import { BOT_EMAIL, isBotEmail, parseGitLog } from '../src/git.mjs';
 import { buildNarrative, cleanPrBody, collectPrs, prNumberFromSubject } from '../src/narrative.mjs';
-import { approxTokens } from '../src/text.mjs';
 
 describe('narrative', () => {
   const LOG =

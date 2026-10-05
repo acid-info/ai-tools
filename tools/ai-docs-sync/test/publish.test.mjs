@@ -1,14 +1,15 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { API } from '../src/api.mjs';
+import { API } from '#core/api.mjs';
+import { costOf } from '#core/models.mjs';
+import { makeUsageLog } from '#core/usage.mjs';
+
 import { MARKER_MAX_CHARS, PR_BODY_MAX } from '../src/config.mjs';
 import { BOT_EMAIL, gitAuthEnv } from '../src/git.mjs';
-import { costOf } from '../src/models.mjs';
 import { narrativeOutline } from '../src/narrative.mjs';
 import { blobUrl, renderPrBody } from '../src/pr-body.mjs';
 import { commitMessage, commitScope, lastRunFor, parseMarker, prTitle, regenerateFrom, renderMarker } from '../src/publish.mjs';
-import { makeUsageLog } from '../src/usage.mjs';
 
 describe('publishing helpers', () => {
   test('commit scope, subject and body follow the fixed template', () => {

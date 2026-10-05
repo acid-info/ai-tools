@@ -3,19 +3,13 @@ import assert from 'node:assert/strict';
 import { symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { parseYamlSubset } from '#core/yaml.mjs';
+
 import { hasSymlinkComponent, makeIsEditableDoc, makeIsEditableDocPath, validateRollingBranch } from '../src/allowlist.mjs';
 import { DEFAULTS, loadConfig } from '../src/config.mjs';
-import { canonicalise, globToRegex } from '../src/paths.mjs';
-import { parseYamlSubset } from '../src/yaml.mjs';
 import { CFG_TEXT, cfg, tmpRepo } from './helpers.mjs';
 
 describe('config', () => {
-  test('parses the documented subset with comments and quotes', () => {
-    const parsed = parseYamlSubset(CFG_TEXT);
-    assert.deepEqual(parsed.never_touch, ['docs/superpowers/specs/**']);
-    assert.deepEqual(parsed.extra_ignore, ['flake.lock', 'apps/cms/src/app/(payload)/admin/importMap.js']);
-  });
-
   test('inline flow lists parse like block lists', () => {
     const parsed = parseYamlSubset(`doc_paths: [docs/**/*.md, 'README.md', "apps/*/README.md"]  # inline\nnever_touch: []\n`);
     assert.deepEqual(parsed.doc_paths, ['docs/**/*.md', 'README.md', 'apps/*/README.md']);
@@ -67,20 +61,6 @@ describe('config', () => {
 });
 
 describe('allowlist predicate', () => {
-  test('the glob alone is traversable, which is why canonicalise runs first', () => {
-    assert.ok(globToRegex('docs/**/*.md').test('docs/../../x.md'));
-  });
-
-  test('canonicalise rejects traversal, dot segments, absolute paths and odd bytes', () => {
-    assert.equal(canonicalise('docs/../../x.md'), null);
-    assert.equal(canonicalise('docs/./x.md'), null);
-    assert.equal(canonicalise('/etc/passwd.md'), null);
-    assert.equal(canonicalise('docs\\x.md'), null);
-    assert.equal(canonicalise('docs/x\0.md'), null);
-    assert.equal(canonicalise(''), null);
-    assert.equal(canonicalise('docs//x.md'), 'docs/x.md');
-  });
-
   test('doc_paths, never_touch precedence, .md-only rule and the denylist', () => {
     const ok = makeIsEditableDocPath(cfg());
     assert.equal(ok('README.md'), true);

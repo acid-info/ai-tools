@@ -6,28 +6,31 @@ import { existsSync, readFileSync, readdirSync, lstatSync, mkdtempSync, mkdirSyn
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { API } from '#core/api.mjs';
+import { createGitHub } from '#core/github.mjs';
+import { loadGuidelines } from '#core/guidelines.mjs';
+import { isTransientError } from '#core/http.mjs';
+import { makeMatcher } from '#core/paths.mjs';
+import { anthropicCall, openaiCall } from '#core/providers.mjs';
+import { approxTokens, mapConcurrent } from '#core/text.mjs';
+import { makeUsageLog } from '#core/usage.mjs';
+
 import { makeIsEditableDoc, makeIsEditableDocPath, validateRollingBranch } from './src/allowlist.mjs';
-import { API } from './src/api.mjs';
 import { applyReviewerDecisions, classifyReviewerChanges, describeDecision, fixupsOfRevertedDelete, foreignBranchCommit, parseReviewerDecisions, planCarryForward, reconcileReviewerCarry, renderReviewerDecisions } from './src/carry.mjs';
 import { CHECKER_SYSTEM, checkInBatches, checkerUser, decideAfterCheck, parseChecker } from './src/checker.mjs';
 import { CURSOR_REF, DENYLIST, STATUS_CONTEXT, VERSION, loadConfig, pickModels } from './src/config.mjs';
 import { runGates } from './src/gates.mjs';
 import { BOT_EMAIL, BOT_NAME, GIT_LOG_FORMAT, gitAuthEnv, isBotEmail, isToolCommit, parseGitLog, parseNameStatus, splitUnifiedDiff } from './src/git.mjs';
-import { guidelineFileSet, isGuidelineFile, loadGuidelines } from './src/guidelines.mjs';
-import { fetchRetry, isTransientError } from './src/http.mjs';
+import { guidelineFileSet, isGuidelineFile } from './src/guidelines.mjs';
 import { unifiedDiff } from './src/linediff.mjs';
 import { inboundLinks } from './src/links.mjs';
 import { buildManifest, renderManifest } from './src/manifest.mjs';
 import { buildNarrative, collectPrs, narrativeOutline } from './src/narrative.mjs';
-import { makeMatcher } from './src/paths.mjs';
 import { applyInboundLinks, dropOrphanedDependents, finaliseIndexTasks, flagBrokenInbound, markNewDocLinks, planCreates, planDeletes } from './src/plan.mjs';
 import { renderPrBody } from './src/pr-body.mjs';
-import { anthropicCall, openaiCall } from './src/providers.mjs';
 import { commitMessage, commitScope, lastRunFor, parseMarker, prTitle, regenerateFrom } from './src/publish.mjs';
 import { classifyChanges, packDiff, selectRange } from './src/range.mjs';
-import { approxTokens, mapConcurrent } from './src/text.mjs';
 import { TRIAGE_SYSTEM, parseTriage, renderReviewerBlock, renderStaleBlock, triageUser } from './src/triage.mjs';
-import { makeUsageLog } from './src/usage.mjs';
 import { WRITER_SYSTEM, correctionPart, parseWriterOutput, writerDocPart, writerPrefix } from './src/writer.mjs';
 
 const {
@@ -79,29 +82,7 @@ const gitOk = (args) => {
   }
 };
 
-async function gh(path, { allow404 = false, method = 'GET', body } = {}) {
-  const res = await fetchRetry(
-    fetch,
-    `${API.github.baseUrl}${path}`,
-    {
-      method,
-      headers: {
-        Authorization: `Bearer ${GITHUB_TOKEN}`,
-        Accept: API.github.accept,
-        'X-GitHub-Api-Version': API.github.version,
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    },
-    { timeoutMs: 60_000, onRetry: (m) => warn(`GitHub ${method} ${path}: ${m}`) }
-  );
-  if (res.status === 404 && allow404) return null;
-  if (!res.ok) {
-    const text = await res.text();
-    throw Object.assign(new Error(`GitHub ${method} ${path} -> ${res.status}: ${text}`), { status: res.status, text });
-  }
-  return res.status === 204 ? null : res.json();
-}
+const { request: gh, paginate: ghAll } = createGitHub({ token: GITHUB_TOKEN, onRetry: warn });
 
 // Pushes from a throwaway repo that borrows the checkout's objects: setup_command can write hooks
 // and config into .git, and none of it may run next to the token.
@@ -126,16 +107,6 @@ function treeEntry(treeish, p) {
   const line = git(['ls-tree', '-z', treeish, '--', p]).replace(/\0$/, '');
   const m = line.match(/^(\d+) blob ([0-9a-f]+)\t/);
   return m ? { mode: m[1], blob: m[2] } : null;
-}
-
-async function ghAll(path) {
-  const out = [];
-  for (let page = 1; ; page++) {
-    const batch = await gh(`${path}${path.includes('?') ? '&' : '?'}per_page=100&page=${page}`);
-    out.push(...batch);
-    if (batch.length < 100) break;
-  }
-  return out;
 }
 
 const readCheckout = (p) => (existsSync(join(ROOT, p)) ? readFileSync(join(ROOT, p), 'utf8') : null);
@@ -426,7 +397,7 @@ async function main() {
   const manifestText = renderManifest(manifest);
   log(`Manifest: ${manifest.length} editable docs\n${manifestText}\n`);
 
-  const guidelines = loadGuidelines(cfg, ROOT, changedPaths, readCheckout, { log, warn });
+  const guidelines = loadGuidelines(cfg.guidelines_files, ROOT, changedPaths, readCheckout, { log, warn });
   const guidelineFiles = guidelineFileSet(cfg, ROOT);
 
   // ----------------------------------------------------------- paid stages ---

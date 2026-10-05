@@ -1,8 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { API } from '#core/api.mjs';
+
 import { makeIsEditableDocPath } from '../src/allowlist.mjs';
-import { API } from '../src/api.mjs';
 import { checkerUser } from '../src/checker.mjs';
 import { TRIAGE_SYSTEM, parseTriage, renderStaleBlock, triageUser } from '../src/triage.mjs';
 import { writerPrefix } from '../src/writer.mjs';

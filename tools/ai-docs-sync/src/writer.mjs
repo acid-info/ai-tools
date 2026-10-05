@@ -1,6 +1,7 @@
+import { approxTokens } from '#core/text.mjs';
+
 import { DEFAULTS } from './config.mjs';
 import { HOUSE_STYLE, UNTRUSTED } from './prompting.mjs';
-import { approxTokens } from './text.mjs';
 import { triageUser } from './triage.mjs';
 
 export const WRITER_SYSTEM = `You keep documentation in step with code. You are given the repository guidelines, the change

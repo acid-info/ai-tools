@@ -1,8 +1,9 @@
 import { lstatSync } from 'node:fs';
 import { posix as path } from 'node:path';
 
+import { canonicalise, makeMatcher } from '#core/paths.mjs';
+
 import { DENYLIST } from './config.mjs';
-import { canonicalise, makeMatcher } from './paths.mjs';
 
 export function makeIsEditableDocPath(cfg) {
   const inDocs = makeMatcher(cfg.doc_paths);

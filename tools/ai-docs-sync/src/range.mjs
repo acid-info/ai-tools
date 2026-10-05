@@ -1,5 +1,6 @@
+import { approxTokens } from '#core/text.mjs';
+
 import { DEFAULTS } from './config.mjs';
-import { approxTokens } from './text.mjs';
 
 // `isAncestor(sha)` must also be false when the object is not present locally.
 export function selectRange({ since, cursor, pushBefore, pushForced }, isAncestor) {

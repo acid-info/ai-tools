@@ -13,7 +13,7 @@ export function makeUsageLog(log = () => {}, warn = () => {}) {
       if (cost == null) {
         if (!unpriced.has(model)) {
           unpriced.add(model);
-          warn(`No price configured for model "${model}"; its usage is excluded from the total. Add it to PRICES in lib.mjs.`);
+          warn(`No price configured for model "${model}"; its usage is excluded from the total. Add it to PRICES in core/models.mjs.`);
         }
         log(`[cost] ${label} (${model}): ${line} = $? (price unknown)`);
         return;

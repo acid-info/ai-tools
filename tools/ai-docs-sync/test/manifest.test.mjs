@@ -1,7 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { API } from '../src/api.mjs';
+import { API } from '#core/api.mjs';
+
 import { extractRelativeLinks, resolveLink } from '../src/links.mjs';
 import { buildManifest, renderManifest } from '../src/manifest.mjs';
 

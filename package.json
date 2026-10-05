@@ -9,5 +9,8 @@
   "scripts": {
     "check": "git ls-files -z '*.mjs' | xargs -0 -n1 node --check",
     "test": "node --test"
+  },
+  "imports": {
+    "#core/*": "./core/*"
   }
 }

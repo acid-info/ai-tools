@@ -1,4 +1,4 @@
-import { API } from './api.mjs';
+import { API } from '#core/api.mjs';
 
 export const BOT_NAME = 'github-actions[bot]';
 export const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';

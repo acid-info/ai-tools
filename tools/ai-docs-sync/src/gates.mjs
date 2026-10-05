@@ -1,7 +1,8 @@
+import { canonicalise } from '#core/paths.mjs';
+
 import { isGuidelineFile } from './guidelines.mjs';
 import { addedLineIndexes, lineDiff, unifiedDiff } from './linediff.mjs';
 import { extractRelativeLinks, fencedLines, resolveLink } from './links.mjs';
-import { canonicalise } from './paths.mjs';
 import { dropOrphanedDependents } from './plan.mjs';
 
 const DASH_RE = /[\u2013\u2014]/g;

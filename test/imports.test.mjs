@@ -27,8 +27,8 @@ const importOnly = (f) => readFileSync(f, 'utf8').startsWith('#!') || f.endsWith
 for (const file of files) {
   test(`imports resolve: ${relative(ROOT, file)}`, async () => {
     const text = readFileSync(file, 'utf8');
-    for (const m of text.matchAll(/^import \{([^}]*)\} from '(\.[^']+)';$/gm)) {
-      const mod = await import(pathToFileURL(resolve(dirname(file), m[2])).href);
+    for (const m of text.matchAll(/^import \{([^}]*)\} from '([.#][^']+)';$/gm)) {
+      const mod = await import(m[2].startsWith('#') ? m[2] : pathToFileURL(resolve(dirname(file), m[2])).href);
       for (const name of m[1].split(',').map((n) => n.trim().split(/\s+as\s+/)[0]).filter(Boolean))
         assert.ok(name in mod, `${m[2]} does not export ${name}`);
     }

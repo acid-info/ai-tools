@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { API } from '#core/api.mjs';
+
 import { makeIsEditableDoc } from '../src/allowlist.mjs';
-import { API } from '../src/api.mjs';
 import { gateAllowlist, gateFlags, gateFormat, gateLinks, gateNonEmpty, gateSize, gateStyle, runGates } from '../src/gates.mjs';
 import { cfg, tmpRepo } from './helpers.mjs';
 

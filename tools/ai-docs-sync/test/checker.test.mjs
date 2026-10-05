@@ -1,8 +1,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
+import { approxTokens } from '#core/text.mjs';
+
 import { CHECKER_SYSTEM, batchByTokens, checkInBatches, checkerUser, decideAfterCheck, parseChecker } from '../src/checker.mjs';
-import { approxTokens } from '../src/text.mjs';
 
 describe('checker parser and the single-correction rule', () => {
   test('parses verdicts and normalises severities', () => {

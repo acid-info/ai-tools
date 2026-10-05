@@ -1,7 +1,8 @@
+import { canonicalise } from '#core/paths.mjs';
+import { approxTokens, mapConcurrent } from '#core/text.mjs';
+
 import { DEFAULTS } from './config.mjs';
-import { canonicalise } from './paths.mjs';
 import { UNTRUSTED, parseJsonObject } from './prompting.mjs';
-import { approxTokens, mapConcurrent } from './text.mjs';
 
 export const CHECKER_SYSTEM = `You review documentation changes that another model made in response to a code change. You
 are given the change narrative, the code diff, the manifest of editable docs, and for each doc:

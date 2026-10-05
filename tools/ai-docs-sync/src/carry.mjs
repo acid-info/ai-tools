@@ -1,6 +1,7 @@
+import { canonicalise } from '#core/paths.mjs';
+
 import { isBotEmail, isToolCommit } from './git.mjs';
 import { inboundLinks } from './links.mjs';
-import { canonicalise } from './paths.mjs';
 
 // The commit that makes the rolling branch someone else's work, or null. `changesOf` keeps renames.
 export function foreignBranchCommit(commits, { changesOf, isEditableDoc }) {

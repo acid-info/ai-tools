@@ -1,6 +1,7 @@
+import { approxTokens } from '#core/text.mjs';
+
 import { DEFAULTS } from './config.mjs';
 import { isBotEmail } from './git.mjs';
-import { approxTokens } from './text.mjs';
 
 export function prNumberFromSubject(subject) {
   const merge = subject.match(/^Merge pull request #(\d+)\b/);

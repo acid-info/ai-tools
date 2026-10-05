@@ -1,6 +1,7 @@
+import { canonicalise } from '#core/paths.mjs';
+
 import { renderReviewerDecisions } from './carry.mjs';
 import { MARKER_MAX_CHARS, MARKER_RUNS } from './config.mjs';
-import { canonicalise } from './paths.mjs';
 
 // `docs/<project>/sync` -> `<project>`.
 export function commitScope(branch) {

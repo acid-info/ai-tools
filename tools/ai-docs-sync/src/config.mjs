@@ -1,10 +1,10 @@
-import { BUILT_IN_IGNORE } from './paths.mjs';
-import { parseYamlSubset } from './yaml.mjs';
+import { BUILT_IN_IGNORE } from '#core/paths.mjs';
+import { parseYamlSubset } from '#core/yaml.mjs';
 
 export const VERSION = '1.0.0';
 
 // Models, effort and budgets are owned here. Change a model in DEFAULTS, then update PRICES and
-// check EFFORT_MODELS still matches it: all three or the cost line and effort silently drift.
+// check EFFORT_MODELS in core/models.mjs: all three or the cost line and effort silently drift.
 export const DEFAULTS = {
   triage_model: 'gpt-6-luna',
   writer_model: 'claude-opus-5-5',

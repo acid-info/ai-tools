@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { applyReviewerDecisions, classifyReviewerChanges, fixupsOfRevertedDelete, foreignBranchCommit, parseReviewerDecisions, planCarryForward, reconcileReviewerCarry, renderReviewerDecisions } from '../src/carry.mjs';
 import { PR_BODY_MAX } from '../src/config.mjs';
 import { BOT_EMAIL, isToolCommit } from '../src/git.mjs';
-import { collectAgentsFiles, loadGuidelines } from '../src/guidelines.mjs';
 import { inboundLinks } from '../src/links.mjs';
 import { buildManifest } from '../src/manifest.mjs';
 import { applyInboundLinks, dropOrphanedDependents, planCreates } from '../src/plan.mjs';
@@ -87,20 +86,6 @@ describe('carry forward (read side) and guidelines', () => {
     });
   });
 
-  test('AGENTS.md files are gathered from the root and touched directories', () => {
-    const root = tmpRepo({ 'AGENTS.md': 'root', 'apps/api/AGENTS.md': 'api', 'apps/web/AGENTS.md': 'web', 'CLAUDE.md': 'claude' });
-    try {
-      assert.deepEqual(collectAgentsFiles(root, ['apps/api/src/x.ts', '../escape']), ['AGENTS.md', 'apps/api/AGENTS.md']);
-      const g = loadGuidelines(cfg(), root, ['apps/api/src/x.ts'], (f) => `<${f}>`);
-      assert.deepEqual(g.files, ['AGENTS.md', 'apps/api/AGENTS.md']);
-      assert.match(g.text, /--- AGENTS\.md ---\n<AGENTS\.md>\n\n--- apps\/api\/AGENTS\.md ---/);
-      rmSync(join(root, 'AGENTS.md'));
-      rmSync(join(root, 'apps'), { recursive: true });
-      assert.deepEqual(loadGuidelines(cfg(), root, [], (f) => `<${f}>`).files, ['CLAUDE.md']);
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('reviewer decisions', () => {

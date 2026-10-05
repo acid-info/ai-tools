@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { codeBlock, defuse, defuseRefs, inlineCode } from '../src/markdown.mjs';
+import { codeBlock, defuse, defuseRefs, inlineCode } from '../markdown.mjs';
 
 describe('defuse', () => {
   test('mentions and closing keywords are neutralised and length is capped', () => {

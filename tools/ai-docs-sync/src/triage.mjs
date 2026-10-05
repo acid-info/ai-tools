@@ -1,4 +1,5 @@
-import { canonicalise } from './paths.mjs';
+import { canonicalise } from '#core/paths.mjs';
+
 import { UNTRUSTED, cleanList, parseJsonObject } from './prompting.mjs';
 
 export const TRIAGE_SYSTEM = `You decide which documentation files a code change invalidates. You are given the change
