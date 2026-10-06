@@ -61,13 +61,6 @@ In every tool, the job never runs PR-authored code, the caller's `permissions:` 
 it can do, and model output is defused before it is posted. Consumers pass secrets explicitly,
 never with `secrets: inherit`.
 
-## Migration status
-
-`acid-info/ai-review` and `acid-info/ai-docs-sync` still serve production consumers at their `v1`
-tags. Both tools here are verified end to end in a sandbox repo. To move a consumer, change its
-`uses:` line to the one above; ai-docs-sync consumers keep their `.github/docs-sync.yml`, cursor
-ref and rolling branch. Archive the old repos once no consumer references them.
-
 ## License
 
 [MIT](LICENSE).
