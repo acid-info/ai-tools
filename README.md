@@ -24,7 +24,7 @@ The tag moves with each release. Pin a commit SHA instead for immutability.
 
 ## Development
 
-Node 22, no dependencies, no build step.
+Node 24, no dependencies, no build step.
 
 ```bash
 npm run check && npm test

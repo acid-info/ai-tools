@@ -5,7 +5,7 @@ How this repo is built and the rules for changing it. When working on a tool, al
 
 ## Rules
 
-- No npm dependencies and no build step. Node 22 built-ins only.
+- No npm dependencies and no build step. Node 24 built-ins only.
 - Tools import shared code as `#core/<module>.mjs` and never import from another tool.
 - Move code into `core/` only when a second tool needs it.
 - `main.mjs` is the only file in a tool that reads `process.env`. Modules in `src/` take git,

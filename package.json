@@ -4,7 +4,7 @@
   "description": "AI workflows for GitHub, shipped as reusable workflows. No dependencies, no build step.",
   "license": "MIT",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "check": "git ls-files -z '*.mjs' | xargs -0 -n1 node --check",
