@@ -1,0 +1,8 @@
+doc_paths:
+  - README.md
+  - AGENTS.md
+  - tools/*/README.md
+  - tools/*/AGENTS.md
+
+guidelines_files:
+  - AGENTS.md

@@ -1,0 +1,33 @@
+# AI docs sync on this repo, through the released tag like any consumer.
+# Runs on every push to master and maintains one rolling docs PR.
+name: AI Docs Sync
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      since:
+        description: 'Commit SHA to diff from (backfill / re-run). Defaults to the cursor.'
+        required: false
+      dry_run:
+        description: 'Print the would-be PR instead of pushing it'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  sync:
+    uses: acid-info/ai-tools/.github/workflows/ai-docs-sync.yml@ai-docs-sync/v1
+    with:
+      target_branch: master
+      since: ${{ inputs.since }}
+      dry_run: ${{ inputs.dry_run == true }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DOCS_SYNC_TOKEN: ${{ secrets.DOCS_SYNC_TOKEN }}
