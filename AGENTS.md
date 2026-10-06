@@ -22,7 +22,10 @@ How this repo is built and the rules for changing it. When working on a tool, al
 ## Layout
 
 ```
-.github/workflows/   one reusable workflow per tool (GitHub only finds them here), plus CI
+.github/
+  workflows/         one reusable workflow per tool (GitHub only finds them here), CI, and a
+                     <tool>-caller.yml per tool that runs its release on this repo
+  docs-sync.yml      ai-docs-sync config for this repo
 core/                code shared by every tool
 tools/<tool>/
   main.mjs           entry point; the only file that reads process.env
