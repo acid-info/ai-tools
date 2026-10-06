@@ -3,114 +3,71 @@
 AI workflows for GitHub pull requests and repositories, shipped as reusable workflows. One repo,
 one shared core, one release tag per tool.
 
-| Tool | Kind | Workflow | What it does |
-| --- | --- | --- | --- |
-| [ai-review](tools/ai-review) | reader | `.github/workflows/ai-review.yml` | Two models review a PR on `/ai-review`, a third merges their findings. |
-| [ai-docs-sync](tools/ai-docs-sync) | writer | `.github/workflows/ai-docs-sync.yml` | Keeps a repo's docs in step with its code through a rolling PR. |
+| Tool | Kind | What it does |
+| --- | --- | --- |
+| [ai-review](tools/ai-review) | reader | Two models review a PR on `/ai-review`, a third merges their findings. |
+| [ai-docs-sync](tools/ai-docs-sync) | writer | Keeps a repo's docs in step with its code through a rolling PR. |
 
 A **reader** only comments. A **writer** pushes commits or opens PRs, so it runs with
-`contents: write` in every consumer repo. The difference decides who may release it (see
-[Security model](#security-model)).
+`contents: write` in every consumer repo.
 
-## Layout
+## Using a tool
 
-```
-.github/workflows/   one reusable workflow per tool (GitHub only finds them here), plus CI
-core/                code shared by every tool: model calls, retries, pricing, GitHub REST,
-                     YAML and glob parsing, guideline loading, Markdown escaping
-tools/<tool>/
-  main.mjs           entry point; the only file that reads process.env
-  src/               the tool's modules, pure unless the README says otherwise
-  test/              node:test suites for src/
-  README.md          setup, configuration and behaviour for consumers
-test/                repo-wide checks (every import resolves)
+Each tool's README has the workflow file to add, the secrets it needs and its configuration. A
+consumer calls the tool's reusable workflow at its release tag:
+
+```yaml
+uses: acid-info/ai-tools/.github/workflows/<tool>.yml@<tool>/v1
 ```
 
-## How a tool runs
-
-A consumer repo calls `acid-info/ai-tools/.github/workflows/<tool>.yml@<tool>/v1`. The reusable
-workflow checks the consumer repo out, then checks this repo out at `job.workflow_sha` (the exact
-commit the consumer's ref resolved to) into `.ai-tools/`, sparsely: `core/` and `tools/<tool>/`
-only. It then runs `node .ai-tools/tools/<tool>/main.mjs`.
-
-Tools import shared code as `#core/<module>.mjs`, a Node subpath import declared in the root
-`package.json`. Nothing is installed and nothing is built.
-
-## Dependencies
-
-- **No npm dependencies, no build step.** Everything runs on Node 22 built-ins (`fetch`,
-  `node:test`). `package.json` holds scripts and the `#core/*` alias only.
-- **Tools depend on `core/`, never on each other.** A tool that needs another tool's code moves
-  that code into `core/` first.
-- **`core/` grows by the rule of two.** Code moves there when a second tool needs it, not before.
-  A tool's prompts, config keys and GitHub output stay in the tool.
-- Because a consumer pins one commit, a tool and the `core/` it runs with are always the same
-  version. `core/` has no version of its own.
+The tag moves with each release. Pin a commit SHA instead for immutability.
 
 ## Development
 
-```bash
-npm run check
-```
+Node 22, no dependencies, no build step.
 
 ```bash
-npm test
+npm run check && npm test
 ```
 
-`check` runs `node --check` on every module. `test` runs every suite, including
-`test/imports.test.mjs`, which fails when a relative or `#core/` import names a missing file or
-export. `node --check` alone cannot see that, and consumers run these files straight from a tag.
+Layout, conventions and how to add a tool are in [AGENTS.md](AGENTS.md).
 
 ## Releasing
 
 Each tool has its own moving major tag, `<tool>/v1`, and only repo admins can move it. After a
-change is merged to `master`:
+change is merged to `master`, move the tag of each tool the change is meant for:
 
 ```bash
 git checkout master && git pull && git tag -f ai-review/v1 && git push -f origin ai-review/v1
 ```
 
-Release only the tools the change is meant for. A change to `core/` reaches a tool only when that
-tool's tag moves, so each tool can be rolled forward, or held back, on its own. Consumers that want
-immutability pin a commit SHA instead of the tag.
+A change to `core/` reaches a tool only when that tool's tag moves, so each tool rolls forward,
+or holds back, on its own.
 
 ## Security model
 
-Whoever can move a tool's tag runs code in every consumer repo with that repo's `GITHUB_TOKEN` and
-API keys; for a writer, that includes `contents: write`. One shared tag would let anyone trusted
-to release a reader turn it into a writer everywhere, which is why every tool has its own tag.
+Whoever can move a tool's tag runs code in every consumer repo with that repo's `GITHUB_TOKEN`
+and API keys. That is why each tool has its own tag: a shared one would let anyone trusted to
+release a reader turn it into a writer everywhere.
 
 Two repository rulesets enforce this, and repo admins can bypass both:
 
-- **Protect master and develop**: changes to `master` and `develop` land only through a pull
-  request, and neither branch can be deleted. Admins can push directly.
+- **Protect master and develop**: changes land only through a pull request, and neither branch
+  can be deleted.
 - **Only admins push tags**: creating, moving or deleting any tag is admin-only, so only admins
   can release a tool.
 
-Per tool:
-
-- The job never checks out PR-authored code; config and guideline files come from the consumer's
-  trusted branch, and diffs arrive over the API as data.
-- The caller's `permissions:` block bounds the job. Consumers pass secrets explicitly, never
-  `secrets: inherit`.
-- Model output is untrusted: `@mentions` and issue-closing keywords are defused before anything
-  is posted.
-
-## Adding a tool
-
-1. `tools/<tool>/main.mjs`, `src/`, `test/` and a `README.md` written for consumers.
-2. `.github/workflows/<tool>.yml`: a `workflow_call` workflow that refuses to run when
-   `job.workflow_sha` is empty, checks this repo out at it with
-   `sparse-checkout: core tools/<tool>`, and runs `main.mjs`. Copy the closest existing one.
-3. Consumer config, if any, at `.github/<tool>.yml`, parsed with `#core/yaml.mjs`. Only the keys
-   the tool lists as repo-overridable are honoured; models and budgets stay in the tool.
-4. Decide reader or writer and say so in the tool table above.
-5. Prove it end to end from a sandbox repo before tagging `<tool>/v1`.
+In every tool, the job never runs PR-authored code, the caller's `permissions:` block bounds what
+it can do, and model output is defused before it is posted. Consumers pass secrets explicitly,
+never with `secrets: inherit`.
 
 ## Migration status
 
 `acid-info/ai-review` and `acid-info/ai-docs-sync` still serve production consumers at their `v1`
-tags and are unchanged. Both tools here are verified end to end in a sandbox repo. To move a
-consumer, change its `uses:` line to `acid-info/ai-tools/.github/workflows/<tool>.yml@<tool>/v1`
-(ai-docs-sync consumers keep their `.github/docs-sync.yml`, cursor ref and rolling branch). Archive
-the old repos once no consumer references them.
+tags. Both tools here are verified end to end in a sandbox repo. To move a consumer, change its
+`uses:` line to the one above; ai-docs-sync consumers keep their `.github/docs-sync.yml`, cursor
+ref and rolling branch. Archive the old repos once no consumer references them.
+
+## License
+
+[MIT](LICENSE).
