@@ -80,7 +80,7 @@ jobs:
             tools/ai-docs-sync
       - if: steps.target.outputs.skip != '1'
         uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with: { node-version: 24 }
       - if: steps.target.outputs.skip != '1'
         run: node .ai-tools/tools/ai-docs-sync/main.mjs
         env:
