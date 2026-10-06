@@ -46,7 +46,7 @@ workflow:
    back to this repo's default branch and run code the consumer never pinned;
 3. checks this repo out at `job.workflow_sha` into `.ai-tools/`, sparsely: `core/` and
    `tools/<tool>/` only;
-4. runs `node .ai-tools/tools/<tool>/main.mjs` with the env it needs.
+4. runs `node .ai-tools/tools/<tool>/main.mjs` on Node 24 with the env it needs.
 
 `#core/*` is a Node subpath import declared in the root `package.json`. Nothing is installed and
 nothing is built. Because a consumer pins one commit, a tool and the `core/` it runs with are
@@ -77,7 +77,7 @@ A tool's prompts, config keys and GitHub output stay in the tool, even when they
   `#core/` import names a missing file or export, which `node --check` cannot see and which
   would otherwise only fail inside a consumer's Actions run.
 - Tests never touch the network: pass fakes for `fetch`, git, model calls and the filesystem.
-- CI runs both on every push and pull request.
+- CI runs both on Node 24 on every push and pull request.
 
 ## Security invariants
 
