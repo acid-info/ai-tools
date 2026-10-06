@@ -1,8 +1,8 @@
 # ai-review
 
 AI pull-request reviewer for `logos-co`, `status-im` and `acid-info`. Comment `/ai-review` on a
-pull request: Claude and Codex review the diff independently, a third model merges their
-findings, and the result is posted as one PR review with inline comments.
+pull request: two models review the diff independently, a third merges their findings, and the
+result is posted as one PR review with inline comments.
 
 ## Adding it to a repo
 
