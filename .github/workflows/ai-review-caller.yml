@@ -1,0 +1,19 @@
+# AI PR review on this repo, through the released tag like any consumer.
+# Trigger: comment "/ai-review" on any PR. This file must be on the default branch.
+name: AI PR Review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    uses: acid-info/ai-tools/.github/workflows/ai-review.yml@ai-review/v1
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
