@@ -1,7 +1,7 @@
 import { approxTokens } from '#core/text.mjs';
 
 import { DEFAULTS } from './config.mjs';
-import { isBotEmail } from './git.mjs';
+import { isBotCommit } from './git.mjs';
 
 export function prNumberFromSubject(subject) {
   const merge = subject.match(/^Merge pull request #(\d+)\b/);
@@ -35,7 +35,7 @@ const normalisePr = (pr) => ({
 export async function collectPrs(commits, api, { targetBranch, rollingBranch, maxLookups = DEFAULTS.max_pr_lookups }) {
   const linked = new Map(); // sha -> pr number
   const prs = new Map(); // number -> normalised pr
-  const candidates = commits.filter((c) => !isBotEmail(c.email));
+  const candidates = commits.filter((c) => !isBotCommit(c));
   const wanted = new Set();
   for (const c of candidates) {
     const n = prNumberFromSubject(c.subject);
@@ -97,7 +97,7 @@ export async function collectPrs(commits, api, { targetBranch, rollingBranch, ma
 export function groupCommits({ commits, linked, prs }) {
   const groups = new Map(); // pr number -> commits
   const loose = [];
-  for (const c of commits.filter((x) => !isBotEmail(x.email))) {
+  for (const c of commits.filter((x) => !isBotCommit(x))) {
     const n = linked.get(c.sha);
     const isMerge = c.parents.length > 1;
     if (n && prs.has(n)) {

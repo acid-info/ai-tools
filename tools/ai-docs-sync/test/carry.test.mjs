@@ -46,6 +46,7 @@ describe('carry forward (read side) and guidelines', () => {
     assert.equal(foreignBranchCommit([removal], opts), removal, 'a reviewer delete alone is not a branch the tool owns');
     const rebased = { ...tool, email: web };
     assert.equal(foreignBranchCommit([rebased], opts), null, '"Update with rebase" keeps the tool as author');
+    assert.equal(foreignBranchCommit([suggestion, rebased], opts), null, 'the signed API commit has the same shape: bot author, GitHub committer');
     for (const sha of ['removal', 'rename', 'copy']) assert.equal(foreignBranchCommit([{ ...suggestion, sha }, tool], opts), null, `a reviewer ${sha} is carried`);
     for (const sha of ['renameOut', 'renameIn', 'codeDelete', 'nonMarkdown']) {
       const c = { ...suggestion, sha };
