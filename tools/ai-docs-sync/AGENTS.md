@@ -25,6 +25,7 @@ consumer guide is [README.md](README.md).
 | `src/triage.mjs`, `src/writer.mjs`, `src/checker.mjs` | Each model stage's prompt, input builder and output parser. |
 | `src/gates.mjs`, `src/linediff.mjs` | The mechanical gates and the line diff they use. |
 | `src/publish.mjs`, `src/pr-body.mjs` | Commit message, PR marker and PR body. |
+| `src/commit.mjs` | Creating the signed rolling-branch commit through the Git Data API. Takes `gh` and `git` as arguments. |
 
 Every module in `src/` except `runtime.mjs` and `stages/` is pure: no `process.env`, no network,
 no side effects at import time.
@@ -106,8 +107,14 @@ again. Two exceptions:
 ## Rolling branch
 
 - Always **the target head plus one commit** by `github-actions[bot]` holding every open edit.
-  The commit is built with git plumbing in a throwaway index, so the working tree never changes,
-  and pushed with `--force-with-lease` pinned to the branch state the tool inspected.
+  The tree is built with git plumbing in a throwaway index, so the working tree never changes.
+- **Signed commit.** The commit is created through the Git Data API with `COMMIT_TOKEN` (the
+  Actions token) and no custom author, the only way GitHub signs it, so "require signed commits"
+  rules pass. Its blobs and tree are recreated on GitHub first, and every returned SHA must equal
+  the local one. GitHub is the committer; `isBotCommit` and `isToolCommit` know it by its bot
+  author. Without `COMMIT_TOKEN` the bot is set as author and the commit stays unsigned.
+- **Push.** The commit is fetched by SHA and pushed with `GITHUB_TOKEN` and `--force-with-lease`
+  pinned to the branch state the tool inspected, so a `DOCS_SYNC_TOKEN` push still triggers CI.
 - **Ownership.** Besides the tool's commits, the branch may hold merges and other people's
   commits that only add, edit, delete or rename editable docs (a rename counts only when both
   paths are editable). Anything else, or a branch the tool never committed to, makes the run
@@ -159,7 +166,7 @@ a dry run, a published PR. A failed run leaves it. `TRIAGE_ONLY` never moves it.
 - The diff, commit messages and PR bodies are data and only ever go in user turns.
 - The writer loads the target branch's guidelines, never a draft from the same run.
 - No write credential is persisted in the checkout. Only the push and cursor-update child
-  processes get the token, via env, from a throwaway git dir that borrows the checkout's objects,
+  processes get a token (`GITHUB_TOKEN`; `COMMIT_TOKEN` is only used for API calls), via env, from a throwaway git dir that borrows the checkout's objects,
   so no hook or config written into `.git` runs next to it. `setup_command` is not sandboxed.
 - The force-push target is validated: never the target or default branch, safe charset only.
 
@@ -198,6 +205,7 @@ GITHUB_TOKEN=$(gh auth token) REPO=owner/name TARGET_BRANCH=develop SINCE=<sha> 
 | `DEBUG=1` | Logs every model's raw output and stack traces to stderr. |
 | `PUSH_BEFORE`, `PUSH_FORCED` | From the push event; used only when there is no cursor ref. |
 | `RUN_URL` | Linked from the PR body, the commit message and the commit status. |
+| `COMMIT_TOKEN` | Creates the commit. Only the Actions token gets it signed, so leave it unset locally: the commit is then made with `GITHUB_TOKEN`, unsigned, as `github-actions[bot]`. |
 
 `GITHUB_TOKEN` is needed even for `TRIAGE_ONLY`: the cursor ref, the default branch, the open
 rolling PR and the commit-to-PR lookups are all API reads. `workflow_call` cannot be dispatched
@@ -217,7 +225,8 @@ Changing any of these changes behaviour in every consumer repo:
   `docs/repo/sync`, `label` `docs-sync`).
 - `CURSOR_REF` and `STATUS_CONTEXT` (`docs-sync/gates`).
 - The `Reviewer decisions:` section of the commit message, which the next run parses.
-- The commit identity (`BOT_NAME`, `BOT_EMAIL` in `src/git.mjs`): the ownership check knows the
-  tool's own commits by a bot address, so a change can make every existing rolling branch refuse.
+- The commit identity (`BOT_NAME`, `BOT_EMAIL` in `src/git.mjs`, or the Actions token's bot when
+  the commit is signed): the ownership check knows the tool's own commits by a bot address, so a
+  change can make every existing rolling branch refuse.
 - The `<!-- ai-docs-sync {...} -->` marker shape: the next run reads it back for run history.
 - The workflow inputs (`target_branch`, `since`, `dry_run`) and secret names.

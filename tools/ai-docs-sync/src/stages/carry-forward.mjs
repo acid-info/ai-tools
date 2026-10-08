@@ -1,7 +1,7 @@
 import { approxTokens } from '#core/text.mjs';
 
 import { classifyReviewerChanges, describeDecision, fixupsOfRevertedDelete, foreignBranchCommit, parseReviewerDecisions, planCarryForward, reconcileReviewerCarry } from '../carry.mjs';
-import { GIT_LOG_FORMAT, isBotEmail, isToolCommit, parseGitLog, parseNameStatus, splitUnifiedDiff } from '../git.mjs';
+import { GIT_LOG_FORMAT, isBotCommit, isToolCommit, parseGitLog, parseNameStatus, splitUnifiedDiff } from '../git.mjs';
 import { parseMarker, regenerateFrom } from '../publish.mjs';
 import { packDiff } from '../range.mjs';
 import { renderStaleBlock } from '../triage.mjs';
@@ -121,7 +121,7 @@ export async function carryForward(ctx) {
       for (const p of older) for (const q of [p.path, p.oldPath]) if (q) earlierPaths.add(q);
       earlierDiff = packedOld.diff;
       earlierCommits = parseGitLog(git(['log', '--reverse', '--no-merges', `--format=${GIT_LOG_FORMAT}`, `${earliest}..${from}`]))
-        .filter((c) => !isBotEmail(c.email))
+        .filter((c) => !isBotCommit(c))
         .slice(-50)
         .map((c) => ({ short: c.short, subject: c.subject }));
     }

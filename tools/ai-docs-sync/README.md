@@ -80,6 +80,9 @@ PR, set `DOCS_SYNC_TOKEN` to a fine-grained PAT from a shared bot account with `
 `pull-requests: write` and `statuses: write` on that repo only. The tool then pushes and opens
 the PR as that account, which also triggers CI.
 
+Either way, the rolling commit is created with the workflow's own token and signed by GitHub, so
+it passes "require signed commits" rules.
+
 ## Configuration
 
 At `.github/docs-sync.yml`, read from the **target branch**. Only `doc_paths` is required.

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import { approxTokens } from '#core/text.mjs';
 
-import { BOT_EMAIL, isBotEmail, parseGitLog } from '../src/git.mjs';
-import { buildNarrative, cleanPrBody, collectPrs, prNumberFromSubject } from '../src/narrative.mjs';
+import { BOT_EMAIL, GITHUB_EMAIL, isBotCommit, isBotEmail, parseGitLog } from '../src/git.mjs';
+import { buildNarrative, cleanPrBody, collectPrs, narrativeOutline, prNumberFromSubject } from '../src/narrative.mjs';
 
 describe('narrative', () => {
   const LOG =
@@ -27,6 +27,18 @@ describe('narrative', () => {
     assert.ok(isBotEmail(commits[3].email));
     assert.ok(isBotEmail('12345+docs-bot[bot]@users.noreply.github.com'));
     assert.ok(!isBotEmail('ann@example.com'));
+  });
+
+  test('the tool\'s signed commits are bot commits; other bots\' commits GitHub committed are changes', () => {
+    const signed = { sha: 's', short: 's', email: GITHUB_EMAIL, authorEmail: BOT_EMAIL, parents: ['p'], subject: 'docs(repo): sync with 1..2', body: '' };
+    const dependabot = { sha: 'd', short: 'd', email: GITHUB_EMAIL, authorEmail: '49699333+dependabot[bot]@users.noreply.github.com', parents: ['p'], subject: 'chore(deps): bump', body: '' };
+    const web = { sha: 'w', short: 'w', email: GITHUB_EMAIL, authorEmail: 'ann@example.com', parents: ['p'], subject: 'docs: fix typo', body: '' };
+    assert.ok(isBotCommit(signed));
+    assert.ok(isBotCommit({ ...signed, email: BOT_EMAIL }), 'unsigned, as before');
+    assert.ok(!isBotCommit(dependabot));
+    assert.ok(!isBotCommit(web));
+    const outline = narrativeOutline({ commits: [signed, dependabot, web], linked: new Map(), prs: new Map() });
+    assert.deepEqual(outline[0].commits.map((c) => c.short), ['d', 'w']);
   });
 
   test('PR bodies lose HTML comments and template checkboxes', () => {

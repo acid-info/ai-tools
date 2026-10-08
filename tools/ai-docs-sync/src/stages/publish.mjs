@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { renderReviewerDecisions } from '../carry.mjs';
+import { createApiCommit } from '../commit.mjs';
 import { STATUS_CONTEXT } from '../config.mjs';
 import { BOT_EMAIL, BOT_NAME } from '../git.mjs';
 import { unifiedDiff } from '../linediff.mjs';
@@ -11,7 +12,7 @@ import { renderPrBody } from '../pr-body.mjs';
 import { commitMessage, commitScope, lastRunFor, prTitle, regenerateFrom } from '../publish.mjs';
 
 export async function publish(ctx) {
-  const { DRY_RUN, REPO, RUN_URL, TARGET_BRANCH, capped, carried, carryBase, cfg, commits, count, decisions, delPlan, dropped, findOpenPr, from, gh, git, head, heldBack, isNewDoc, kept, keptDeletes, keptPaths, linked, log, moveCursor, openPr, packed, prevRuns, prs, pushUrl, pushWithToken, remoteSha, reviewer, reviewerRemoved, staleCarried, tombstones, treeEntry, usage, warn } = ctx;
+  const { DRY_RUN, REPO, RUN_URL, TARGET_BRANCH, capped, carried, carryBase, cfg, commits, count, decisions, delPlan, dropped, findOpenPr, from, gh, ghCommit, git, head, heldBack, isNewDoc, kept, keptDeletes, keptPaths, linked, log, moveCursor, openPr, packed, prevRuns, prs, pushUrl, pushWithToken, remoteSha, reviewer, reviewerRemoved, staleCarried, tombstones, treeEntry, usage, warn } = ctx;
   const scope = commitScope(cfg.branch);
   const carriedOnly = [...carried.keys()].filter((p) => !keptPaths.has(p));
   const carriedDeletesOnly = [...tombstones].filter((p) => !keptPaths.has(p));
@@ -80,8 +81,17 @@ export async function publish(ctx) {
     moveCursor('The edits reproduce the target tree exactly; nothing to publish');
     return { done: true };
   }
-  const commit = git(['commit-tree', '--no-gpg-sign', tree, '-p', head, '-F', '-'], {
-    input: commitMessage({
+  // Through the API so GitHub signs it. Only the Actions token, with no custom author, gets a
+  // signature (author `github-actions[bot]`); any other token, as in a local run, would author the
+  // commit as itself, so the bot is set explicitly and the commit stays unsigned.
+  const created = await createApiCommit({
+    gh: ghCommit ?? gh,
+    git,
+    repo: REPO,
+    parent: head,
+    tree,
+    author: ghCommit ? undefined : { name: BOT_NAME, email: BOT_EMAIL },
+    message: commitMessage({
       scope,
       from,
       to: head,
@@ -94,11 +104,13 @@ export async function publish(ctx) {
       decisions,
       runUrl: RUN_URL,
     }),
-    env: { GIT_AUTHOR_NAME: BOT_NAME, GIT_AUTHOR_EMAIL: BOT_EMAIL, GIT_COMMITTER_NAME: BOT_NAME, GIT_COMMITTER_EMAIL: BOT_EMAIL },
   });
-  // The lease pins the push to the branch state the ownership check inspected.
-  pushWithToken([`--force-with-lease=refs/heads/${cfg.branch}:${remoteSha}`, pushUrl, `${commit}:refs/heads/${cfg.branch}`]);
-  log(`Pushed ${cfg.branch} at ${commit.slice(0, 7)}`);
+  const commit = created.sha;
+  if (!created.verified) warn(`commit ${commit.slice(0, 7)} is not signed (${created.reason}); a "require signed commits" rule will block the PR`);
+  // Pushed, not moved through the API, so the lease pins the push to the branch state the
+  // ownership check inspected, and a push with DOCS_SYNC_TOKEN still triggers CI.
+  pushWithToken([`--force-with-lease=refs/heads/${cfg.branch}:${remoteSha}`, pushUrl, `${commit}:refs/heads/${cfg.branch}`], { fetch: [pushUrl, commit] });
+  log(`Pushed ${cfg.branch} at ${commit.slice(0, 7)}` + (created.verified ? ' (signed by GitHub)' : ''));
 
   let pr = openPr;
   if (pr) {

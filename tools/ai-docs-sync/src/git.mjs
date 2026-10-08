@@ -2,14 +2,20 @@ import { API } from '#core/api.mjs';
 
 export const BOT_NAME = 'github-actions[bot]';
 export const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com';
+// Committer of every commit GitHub signs: API-created, web edits, merges and rebases on github.com.
+export const GITHUB_EMAIL = 'noreply@github.com';
 
-// With DOCS_SYNC_TOKEN the committer is the PAT's bot account, whose address is not known here;
-// any GitHub bot-account address counts as ours.
+// Any GitHub bot-account address counts as a bot.
 export const isBotEmail = (email) =>
   email === BOT_EMAIL || /\[bot\]@users\.noreply\.github\.com$/i.test(email ?? '');
 
-// Committer email identifies the tool's own commits; author email survives a rebase merge and
-// is what PR commits are matched on.
+// Bot commits, kept out of the narrative and the ownership check: a bot committer, or the tool's
+// own signed commits, which the bot authors and GitHub commits. Other bots' commits that GitHub
+// committed (a merged Dependabot PR) still count as changes.
+export const isBotCommit = (c) => isBotEmail(c.email) || (c.email === GITHUB_EMAIL && c.authorEmail === BOT_EMAIL);
+
+// Committer email identifies bot commits; author email survives a rebase merge and is what PR
+// commits are matched on.
 export const GIT_LOG_FORMAT = '%H%x00%h%x00%an%x00%ae%x00%ce%x00%P%x00%s%x00%b%x01';
 
 export function parseGitLog(raw) {

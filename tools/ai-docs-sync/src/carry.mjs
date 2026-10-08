@@ -1,6 +1,6 @@
 import { canonicalise } from '#core/paths.mjs';
 
-import { isBotEmail, isToolCommit } from './git.mjs';
+import { isBotCommit, isToolCommit } from './git.mjs';
 import { inboundLinks } from './links.mjs';
 
 // The commit that makes the rolling branch someone else's work, or null. `changesOf` keeps renames.
@@ -9,7 +9,7 @@ export function foreignBranchCommit(commits, { changesOf, isEditableDoc }) {
   if (!commits.some(isToolCommit)) return commits[0];
   const carriable = (ch) =>
     ['A', 'M', 'D'].includes(ch.status) ? isEditableDoc(ch.path) : ['R', 'C'].includes(ch.status) && isEditableDoc(ch.path) && isEditableDoc(ch.oldPath);
-  return commits.find((c) => !isBotEmail(c.email) && c.parents.length < 2 && !changesOf(c.sha).every(carriable)) ?? null;
+  return commits.find((c) => !isBotCommit(c) && c.parents.length < 2 && !changesOf(c.sha).every(carriable)) ?? null;
 }
 
 export const REVIEWER_KINDS = ['deleted', 'renamed', 'declined-create', 'declined-delete'];
