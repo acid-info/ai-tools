@@ -24,6 +24,7 @@ import { writeDocs } from './src/stages/write-docs.mjs';
 
 const {
   GITHUB_TOKEN,
+  COMMIT_TOKEN,
   ANTHROPIC_API_KEY,
   OPENAI_API_KEY,
   REPO,
@@ -34,7 +35,7 @@ const {
   RUN_URL,
 } = process.env;
 // Children (setup_command, prettier, git) inherit process.env; only the push gets a token back.
-for (const k of ['GITHUB_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[k];
+for (const k of ['GITHUB_TOKEN', 'COMMIT_TOKEN', 'ANTHROPIC_API_KEY', 'OPENAI_API_KEY']) delete process.env[k];
 const truthy = (v) => /^(1|true|yes)$/i.test(v ?? '');
 const DRY_RUN = truthy(process.env.DRY_RUN);
 const TRIAGE_ONLY = truthy(process.env.TRIAGE_ONLY);
@@ -65,7 +66,7 @@ async function main() {
 
   const models = pickModels({ anthropic: ANTHROPIC_API_KEY, openai: OPENAI_API_KEY });
   const usage = makeUsageLog(log, warn);
-  const rt = createRuntime({ root: ROOT, githubToken: GITHUB_TOKEN, anthropicKey: ANTHROPIC_API_KEY, openaiKey: OPENAI_API_KEY, usage, log, warn, debug });
+  const rt = createRuntime({ root: ROOT, githubToken: GITHUB_TOKEN, commitToken: COMMIT_TOKEN, anthropicKey: ANTHROPIC_API_KEY, openaiKey: OPENAI_API_KEY, usage, log, warn, debug });
   const { git, gh } = rt;
 
   // 5.1 config, allowlist, guidelines

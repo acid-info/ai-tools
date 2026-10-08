@@ -9,19 +9,20 @@ import { anthropicCall, openaiCall } from '#core/providers.mjs';
 import { gitAuthEnv } from './git.mjs';
 
 // Every side effect the stages need: git and files in the checkout, GitHub, and the model APIs.
-export function createRuntime({ root, githubToken, anthropicKey, openaiKey, usage, log, warn, debug }) {
-  // `raw` keeps the trailing newline: file contents must round-trip byte for byte.
-  function git(args, { quiet = false, input, env, raw = false } = {}) {
+export function createRuntime({ root, githubToken, commitToken, anthropicKey, openaiKey, usage, log, warn, debug }) {
+  // `raw` keeps the trailing newline: file contents must round-trip byte for byte. `buffer`
+  // returns the bytes untouched.
+  function git(args, { quiet = false, input, env, raw = false, buffer = false } = {}) {
     // Unquoted paths, so non-ASCII names match the -z output they are compared with.
     const out = execFileSync('git', ['-c', 'core.quotePath=false', ...args], {
       cwd: root,
-      encoding: 'utf8',
+      encoding: buffer ? 'buffer' : 'utf8',
       maxBuffer: 512 * 1024 * 1024,
       input,
       env: env ? { ...process.env, ...env } : undefined,
       stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', quiet ? 'ignore' : 'inherit'],
     });
-    return raw ? out : out.replace(/\n$/, '');
+    return raw || buffer ? out : out.replace(/\n$/, '');
   }
   const gitOk = (args) => {
     try {
@@ -33,10 +34,14 @@ export function createRuntime({ root, githubToken, anthropicKey, openaiKey, usag
   };
 
   const { request: gh, paginate: ghAll } = createGitHub({ token: githubToken, onRetry: warn });
+  // Creates the rolling-branch commit: only the Actions token gets it signed. Null when there is
+  // no separate commit token, e.g. in a local run.
+  const ghCommit = commitToken ? createGitHub({ token: commitToken, onRetry: warn }).request : null;
 
   // Pushes from a throwaway repo that borrows the checkout's objects: setup_command can write hooks
-  // and config into .git, and none of it may run next to the token.
-  function pushWithToken(args) {
+  // and config into .git, and none of it may run next to the token. `fetch` first fetches a commit
+  // that exists only on GitHub, so the push can name it.
+  function pushWithToken(args, { fetch: [fetchUrl, fetchSha] = [] } = {}) {
     const objects = resolve(root, git(['rev-parse', '--git-path', 'objects']));
     const dir = mkdtempSync(join(tmpdir(), 'ai-docs-sync-push-'));
     try {
@@ -46,6 +51,7 @@ export function createRuntime({ root, githubToken, anthropicKey, openaiKey, usag
       writeFileSync(join(dir, 'HEAD'), 'ref: refs/heads/main\n');
       writeFileSync(join(dir, 'config'), '[core]\n\trepositoryformatversion = 0\n\tbare = true\n');
       const env = { GIT_DIR: dir, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', ...gitAuthEnv(githubToken) };
+      if (fetchSha) git(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', fetchUrl, fetchSha], { env });
       git(['push', '--quiet', ...args], { env });
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -104,5 +110,5 @@ export function createRuntime({ root, githubToken, anthropicKey, openaiKey, usag
     return r;
   };
 
-  return { git, gitOk, gh, ghAll, pushWithToken, treeEntry, readCheckout, walkDocs, makeFormatter, callModel };
+  return { git, gitOk, gh, ghAll, ghCommit, pushWithToken, treeEntry, readCheckout, walkDocs, makeFormatter, callModel };
 }
