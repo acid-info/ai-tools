@@ -55,7 +55,8 @@ at startup, so child processes never inherit them.
 9. **report**: logs the result, and ends the run (moving the cursor) when nothing survived.
 10. **publish**: renders the commit message, PR title and PR body, pushes the rolling branch,
     opens or updates the PR, requests `reviewers` (users and teams in separate calls, so a token
-    that cannot see teams still requests the users), sets the commit status and moves the cursor.
+    that cannot see teams still requests the users; a failed request logs a warning and the run
+    carries on), sets the commit status and moves the cursor.
 
 Every affected doc is written; there is no per-run cap.
 
@@ -202,7 +203,7 @@ GITHUB_TOKEN=$(gh auth token) REPO=owner/name TARGET_BRANCH=develop SINCE=<sha> 
 | --- | --- |
 | `SINCE` | Start of the range; must be an ancestor of the target head. Skips the cursor read. |
 | `TRIAGE_ONLY=1` | Stops after triage and never writes. With junk API keys every free step runs (range, changed files, narrative, packed diff, carry-forward, manifest, guidelines) and the run dies at a 401 having spent nothing. |
-| `DRY_RUN=1` | Runs the model calls and gates (paid), prints the branch, diffs, PR title and body, and moves the cursor. Pushes no branch, touches no PR. |
+| `DRY_RUN=1` | Runs the model calls and gates (paid), prints the branch, diffs, PR title and body and the reviewers it would request, and moves the cursor. Pushes no branch, touches no PR. |
 | `DEBUG=1` | Logs every model's raw output and stack traces to stderr. |
 | `PUSH_BEFORE`, `PUSH_FORCED` | From the push event; used only when there is no cursor ref. |
 | `RUN_URL` | Linked from the PR body, the commit message and the commit status. |
@@ -224,7 +225,7 @@ Changing any of these changes behaviour in every consumer repo:
 
 - `.github/docs-sync.yml` and its `REPO_OVERRIDABLE` keys, with their defaults (`branch`
   `docs/repo/sync`, `label` `docs-sync`, `reviewers` none) and the `@login` / `@org/team` syntax
-  of `reviewers`.
+  of `reviewers` (checked at config load; a team must be in the repo owner's org).
 - `CURSOR_REF` and `STATUS_CONTEXT` (`docs-sync/gates`).
 - The `Reviewer decisions:` section of the commit message, which the next run parses.
 - The commit identity (`BOT_NAME`, `BOT_EMAIL` in `src/git.mjs`, or the Actions token's bot when
