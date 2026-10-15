@@ -6,3 +6,6 @@ doc_paths:
 
 guidelines_files:
   - AGENTS.md
+
+reviewers:
+  - '@acid-info/web'
