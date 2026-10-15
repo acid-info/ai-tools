@@ -128,10 +128,12 @@ The file is a YAML subset: `key: value` lines, and lists as `- item` lines or in
 Models, effort and budgets are set centrally, for every consumer. Setting them in your config logs
 a warning and does nothing.
 
-A bare `@web` is a user called `web`; write a team as `@org/web`. A failed review request is
-logged as a warning and the run carries on. Requesting a team needs a token that can read the
-org's teams, which the Actions token may not be: if the run warns, set `DOCS_SYNC_TOKEN` with
-read access to the org's members.
+A bare `@web` is a user called `web`; write a team as `@org/web`. The leading `@` is optional.
+Entries are checked when the config loads: one that is not a valid login or `org/team`, or a
+team from another org, fails the run. Duplicates are dropped. A failed review request is logged
+as a warning and the run carries on. Requesting a team needs a token that can read the org's
+teams, which the Actions token may not be: if the run warns, set `DOCS_SYNC_TOKEN` with read
+access to the org's members.
 
 Guideline files such as `AGENTS.md` and `CLAUDE.md` are edited like any other doc when
 `doc_paths` covers them, and any edit or delete of one is bannered at the top of the PR with its
