@@ -58,6 +58,22 @@ describe('config', () => {
     const c = loadConfig(`${CFG_TEXT}\nformat_check: strict\nsetup_command: 'pnpm install'\n`);
     assert.equal(c.format_check, 'strict');
   });
+
+  test('reviewers default to none', () => {
+    assert.deepEqual(cfg().reviewRequest, { reviewers: [], team_reviewers: [] });
+  });
+
+  test('reviewers route @org/team to team_reviewers and @login to reviewers, deduped', () => {
+    const c = loadConfig(`${CFG_TEXT}\nreviewers:\n  - '@acid-info/web'\n  - '@Alice'\n  - bob\n  - '@ACID-INFO/Web'\n  - alice\n`, { owner: 'acid-info' });
+    assert.deepEqual(c.reviewRequest, { reviewers: ['Alice', 'bob'], team_reviewers: ['web'] });
+    assert.deepEqual(loadConfig(`${CFG_TEXT}\nreviewers: '@acid-info/web'\n`, { owner: 'acid-info' }).reviewRequest.team_reviewers, ['web']);
+  });
+
+  test('reviewers reject bad entries and teams outside the repo owner', () => {
+    assert.throws(() => loadConfig(`${CFG_TEXT}\nreviewers: ['@a b']\n`), /must be @login or @org\/team/);
+    assert.throws(() => loadConfig(`${CFG_TEXT}\nreviewers: ['@org/team/x']\n`), /must be @login or @org\/team/);
+    assert.throws(() => loadConfig(`${CFG_TEXT}\nreviewers: ['@other/web']\n`, { owner: 'acid-info' }), /team outside acid-info/);
+  });
 });
 
 describe('allowlist predicate', () => {
