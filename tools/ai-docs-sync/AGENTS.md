@@ -54,7 +54,8 @@ at startup, so child processes never inherit them.
 8. **gate-docs**: the mechanical gates.
 9. **report**: logs the result, and ends the run (moving the cursor) when nothing survived.
 10. **publish**: renders the commit message, PR title and PR body, pushes the rolling branch,
-    opens or updates the PR, sets the commit status and moves the cursor.
+    opens or updates the PR, requests `reviewers` (users and teams in separate calls, so a token
+    that cannot see teams still requests the users), sets the commit status and moves the cursor.
 
 Every affected doc is written; there is no per-run cap.
 
@@ -222,7 +223,8 @@ directory.
 Changing any of these changes behaviour in every consumer repo:
 
 - `.github/docs-sync.yml` and its `REPO_OVERRIDABLE` keys, with their defaults (`branch`
-  `docs/repo/sync`, `label` `docs-sync`).
+  `docs/repo/sync`, `label` `docs-sync`, `reviewers` none) and the `@login` / `@org/team` syntax
+  of `reviewers`.
 - `CURSOR_REF` and `STATUS_CONTEXT` (`docs-sync/gates`).
 - The `Reviewer decisions:` section of the commit message, which the next run parses.
 - The commit identity (`BOT_NAME`, `BOT_EMAIL` in `src/git.mjs`, or the Actions token's bot when

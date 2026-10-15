@@ -98,6 +98,7 @@ At `.github/docs-sync.yml`, read from the **target branch**. Only `doc_paths` is
 | `label` | Label on the rolling PR. Default `docs-sync`. |
 | `format_check` | `off` (default) or `strict`, which runs your prettier and needs `setup_command`. |
 | `setup_command` | Shell run before prettier, e.g. `corepack enable && pnpm install --frozen-lockfile`. |
+| `reviewers` | Users (`@login`) and teams (`@org/team`, same org as the repo) asked to review the rolling PR each time it is opened or updated. Default none. |
 
 ```yaml
 doc_paths:
@@ -116,6 +117,9 @@ extra_ignore:
 guidelines_files:
   - AGENTS.md
   - CLAUDE.md
+
+reviewers:
+  - '@acid-info/web'
 ```
 
 The file is a YAML subset: `key: value` lines, and lists as `- item` lines or inline `[a, b]`.
@@ -123,6 +127,11 @@ The file is a YAML subset: `key: value` lines, and lists as `- item` lines or in
 
 Models, effort and budgets are set centrally, for every consumer. Setting them in your config logs
 a warning and does nothing.
+
+A bare `@web` is a user called `web`; write a team as `@org/web`. A failed review request is
+logged as a warning and the run carries on. Requesting a team needs a token that can read the
+org's teams, which the Actions token may not be: if the run warns, set `DOCS_SYNC_TOKEN` with
+read access to the org's members.
 
 Guideline files such as `AGENTS.md` and `CLAUDE.md` are edited like any other doc when
 `doc_paths` covers them, and any edit or delete of one is bannered at the top of the PR with its
