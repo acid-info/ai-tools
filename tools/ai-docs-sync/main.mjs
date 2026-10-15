@@ -72,7 +72,7 @@ async function main() {
   // 5.1 config, allowlist, guidelines
   const cfgPath = join(ROOT, '.github', 'docs-sync.yml');
   if (!existsSync(cfgPath)) throw new Error('.github/docs-sync.yml not found on the target branch');
-  const cfg = loadConfig(readFileSync(cfgPath, 'utf8'), { warn });
+  const cfg = loadConfig(readFileSync(cfgPath, 'utf8'), { warn, owner: REPO.split('/')[0] });
   const isEditableDocPath = makeIsEditableDocPath(cfg);
   const isEditableDoc = makeIsEditableDoc(cfg, ROOT);
   const isIgnored = makeMatcher(cfg.ignore);

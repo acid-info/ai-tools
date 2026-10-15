@@ -54,6 +54,7 @@ export async function publish(ctx) {
     for (const k of kept) log(`\n${unifiedDiff(k.current ?? '', k.content, k.path) || `(no textual diff for ${k.path})`}`);
     for (const d of keptDeletes) log(`\n${unifiedDiff(d.current, '', d.path) || `(${d.path} is empty; deleted)`}`);
     log(`\n----- PR title -----\n${title}\n----- PR body -----\n${prBody}`);
+    for (const [field, names] of Object.entries(cfg.reviewRequest)) if (names.length) log(`Would request ${field}: ${names.join(', ')}`);
     moveCursor('Dry run');
     return { done: true };
   }
@@ -138,6 +139,17 @@ export async function publish(ctx) {
       await gh(`/repos/${REPO}/issues/${pr.number}/labels`, { method: 'POST', body: { labels: [cfg.label] } });
     } catch (e) {
       warn(`could not add label "${cfg.label}" (${e.status ?? e.message}); continuing`);
+    }
+  }
+  // On every publish, so a reviewer who already reviewed is asked again. One call per field: a
+  // token that cannot see org teams then still requests the users.
+  for (const [field, names] of Object.entries(cfg.reviewRequest)) {
+    if (!names.length) continue;
+    try {
+      await gh(`/repos/${REPO}/pulls/${pr.number}/requested_reviewers`, { method: 'POST', body: { [field]: names } });
+      log(`Requested ${field}: ${names.join(', ')}`);
+    } catch (e) {
+      warn(`could not request ${field} ${names.join(', ')} (${e.status ?? e.message}); continuing. GitHub said: ${e.text ?? ''}`);
     }
   }
 

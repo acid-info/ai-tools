@@ -31,6 +31,7 @@ export const DEFAULTS = {
   label: 'docs-sync',
   format_check: 'off',
   setup_command: '',
+  reviewers: [],
 };
 
 export const REPO_OVERRIDABLE = new Set([
@@ -43,6 +44,7 @@ export const REPO_OVERRIDABLE = new Set([
   'label',
   'format_check',
   'setup_command',
+  'reviewers',
 ]);
 
 export const REMOVED_KEYS = {
@@ -60,7 +62,27 @@ export const MARKER_RUNS = 20;
 export const MARKER_MAX_CHARS = 20_000;
 export const BANNER_DIFF_MAX = 8_000;
 
-export function loadConfig(text, { warn = () => {} } = {}) {
+// `@login` is a user, `@org/slug` a team. GitHub only accepts teams from the repo owner's org.
+export function parseReviewers(list, owner) {
+  const out = { reviewers: [], team_reviewers: [] };
+  const seen = new Set();
+  for (const raw of list) {
+    const entry = String(raw).trim().replace(/^@/, '');
+    const team = entry.match(/^([A-Za-z0-9][A-Za-z0-9-]*)\/([A-Za-z0-9][A-Za-z0-9._-]*)$/);
+    if (!team && !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(entry))
+      throw new Error(`.github/docs-sync.yml: reviewers entry "${raw}" must be @login or @org/team`);
+    if (team && owner && team[1].toLowerCase() !== owner.toLowerCase())
+      throw new Error(`.github/docs-sync.yml: reviewers entry "${raw}" is a team outside ${owner}; GitHub only requests teams from the repo's own org`);
+    const [field, name] = team ? ['team_reviewers', team[2]] : ['reviewers', entry];
+    const key = `${field}:${name.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out[field].push(name);
+  }
+  return out;
+}
+
+export function loadConfig(text, { warn = () => {}, owner = '' } = {}) {
   const cfg = { ...DEFAULTS };
   const parsed = parseYamlSubset(text ?? '');
   for (const [key, val] of Object.entries(parsed)) {
@@ -77,7 +99,7 @@ export function loadConfig(text, { warn = () => {} } = {}) {
     }
     cfg[key] = val;
   }
-  for (const k of ['doc_paths', 'never_touch', 'extra_ignore', 'guidelines_files']) {
+  for (const k of ['doc_paths', 'never_touch', 'extra_ignore', 'guidelines_files', 'reviewers']) {
     if (!Array.isArray(cfg[k])) cfg[k] = cfg[k] === '' || cfg[k] == null ? [] : [String(cfg[k])];
   }
   if (!cfg.doc_paths.length) throw new Error('.github/docs-sync.yml: doc_paths is required and must list at least one glob');
@@ -90,6 +112,7 @@ export function loadConfig(text, { warn = () => {} } = {}) {
   cfg.branch = String(cfg.branch);
   cfg.setup_command = String(cfg.setup_command ?? '');
   cfg.ignore = [...BUILT_IN_IGNORE, ...cfg.extra_ignore];
+  cfg.reviewRequest = parseReviewers(cfg.reviewers, owner);
   return cfg;
 }
 
