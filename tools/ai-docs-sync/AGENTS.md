@@ -54,9 +54,9 @@ at startup, so child processes never inherit them.
 8. **gate-docs**: the mechanical gates.
 9. **report**: logs the result, and ends the run (moving the cursor) when nothing survived.
 10. **publish**: renders the commit message, PR title and PR body, pushes the rolling branch,
-    opens or updates the PR, requests `reviewers` (users and teams in separate calls, so a token
-    that cannot see teams still requests the users; a failed request logs a warning and the run
-    carries on), sets the commit status and moves the cursor.
+    opens or updates the PR, requests `reviewers` (users and teams in separate calls, so the
+    Actions token, which cannot see teams, still requests the users; a failed request logs a
+    warning and the run carries on), sets the commit status and moves the cursor.
 
 Every affected doc is written; there is no per-run cap.
 
