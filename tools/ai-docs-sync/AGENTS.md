@@ -37,23 +37,23 @@ at startup, so child processes never inherit them.
 
 ## Pipeline
 
-1. **pick-range**: the range runs from the cursor ref to `HEAD`; `SINCE` overrides it, and with no
+1. `pick-range`: the range runs from the cursor ref to `HEAD`; `SINCE` overrides it, and with no
    cursor yet it falls back to `PUSH_BEFORE`, then `HEAD~1`. Capped at the newest 250 commits on
    the target's first-parent line.
-2. **read-changes**: changed files, ignores, and the change narrative: each commit's title and
+2. `read-changes`: changed files, ignores, and the change narrative: each commit's title and
    body, plus the title and body of any PR it came from, within `narrative_max_tokens`. A push
    that touches only docs (including merging the rolling PR) stops here, before any paid call.
-3. **carry-forward**: validates the rolling branch and carries its open edits, deletes and
+3. `carry-forward`: validates the rolling branch and carries its open edits, deletes and
    reviewer decisions into this run (see [Rolling branch](#rolling-branch)).
-4. **read-docs**: the manifest of editable docs and the guideline files.
-5. **triage-docs**: the triage model picks docs to update, create or delete.
-6. **write-docs**: the writer model rewrites or creates each doc, up to `writer_concurrency` at a
+4. `read-docs`: the manifest of editable docs and the guideline files.
+5. `triage-docs`: the triage model picks docs to update, create or delete.
+6. `write-docs`: the writer model rewrites or creates each doc, up to `writer_concurrency` at a
    time. A second wave links new docs from an index.
-7. **check-docs**: the checker model reviews every rewrite, create and delete. It can demand at
+7. `check-docs`: the checker model reviews every rewrite, create and delete. It can demand at
    most one correction pass of a rewrite, or drop a create or delete.
-8. **gate-docs**: the mechanical gates.
-9. **report**: logs the result, and ends the run (moving the cursor) when nothing survived.
-10. **publish**: renders the commit message, PR title and PR body, pushes the rolling branch,
+8. `gate-docs`: the mechanical gates.
+9. `report`: logs the result, and ends the run (moving the cursor) when nothing survived.
+10. `publish`: renders the commit message, PR title and PR body, pushes the rolling branch,
     opens or updates the PR, requests `reviewers` (users and teams in separate calls, so the
     Actions token, which cannot see teams, still requests the users; a failed request logs a
     warning and the run carries on), sets the commit status and moves the cursor.
@@ -66,19 +66,19 @@ A new doc is created when the change adds a user- or developer-facing surface (a
 service, CLI command, config area, API, workflow or integration) that no doc covers and that
 would not fit in an existing one.
 
-- **Placement**, checked before any writer call: the path must sit in a directory that already
-  holds an editable doc, one new directory level under such a directory, or beside a sibling
-  directory's doc of the same name (`packages/new/README.md` next to `packages/old/README.md`).
-  The repo root does not count as a parent or sibling, so a new top-level directory is always
-  refused.
-- **Exemplar** for structure and tone: the same-named doc in a sibling directory, else the
-  median-sized doc in the same directory, else one in the parent.
-- **Size**: a create larger than 3x its exemplar is held back when the exemplar is over 400 bytes.
-- **Index link**: the second writer wave links the new doc from the `README.md` or `index.md` in
-  its directory or the parent, else the shortest-path doc that already links into that directory,
-  its parent or a sibling directory. If a create is held back, so is its index update.
-- The checker drops a create that duplicates an existing doc's scope or that the diff does not
-  justify.
+Placement is checked before any writer call: the path must sit in a directory that already holds
+an editable doc, one new directory level under such a directory, or beside a sibling directory's
+doc of the same name (`packages/new/README.md` next to `packages/old/README.md`). The repo root
+does not count as a parent or sibling, so a new top-level directory is always refused.
+
+The exemplar, used for structure and heading depth, is the same-named doc in a sibling directory,
+else the median-sized doc in the same directory, else one in the parent. A create larger than 3x
+its exemplar is held back when the exemplar is over 400 bytes.
+
+The second writer wave links the new doc from the `README.md` or `index.md` in its directory or
+the parent, else the shortest-path doc that already links into that directory, its parent or a
+sibling directory. If a create is held back, so is its index update. The checker drops a create
+that duplicates an existing doc's scope or that the diff does not justify.
 
 ### Deletes
 
@@ -91,9 +91,33 @@ retargeted in the same run; links from docs the tool may not edit are listed und
 ### Gates
 
 Run on every change: the path allowlist, resolution of added links against the post-edit tree,
-dash and attribution scans, size sanity, a banner for guideline-file edits and deletes, and
+dash and attribution checks, size sanity, a banner for guideline-file edits and deletes, and
 prettier when `format_check: strict`. Results go to the `docs-sync/gates` commit status, since a
 PR pushed with `GITHUB_TOKEN` runs no CI.
+
+Dashes are handled twice. `mechanicalIssues` runs before a checker verdict is acted on and returns
+`must` issues tagged `source: 'style'` for dashes and attribution on the lines the draft adds;
+`decideAfterCheck` sends the file to the correction pass for them whatever the model's verdict,
+except when it is `drop`. `gateStyle` (gate 4) is the fallback for what survives, which happens
+when the correction call fails or returns unparseable output, or when the writer leaves a dash in.
+
+`gateStyle` masks fenced blocks, code spans, HTML comments, link targets, URLs, HTML tags and YAML
+front matter, so a dash inside a code sample is never touched, and it only rewrites lines this run
+added: lines carried from an earlier draft keep their dashes. Its replacement table lives in
+`fixParagraph` and works a paragraph at a time, so a dash at the end of a wrapped line and a pair
+split over two lines follow the same rules as on one line. A number range becomes a hyphen, a pair
+becomes parentheses, a label in a list item, heading or table cell becomes a colon, any other
+single dash becomes a colon, or a comma when the sentence already has a colon, and a dangling dash
+is dropped. Unspaced `--` and a spaced hyphen are reported, not rewritten. Attribution on an added
+line still drops the file.
+
+Every replacement comes back in `fixes` as `{ line, before, after, count }`, and
+`describeDashFixes` turns those plus `left` (added lines whose dash pairs with one on a line this
+run did not change) into the PR body line. Gate 4 fixes never fail the status.
+
+`gateFlags` adds the non-blocking `style` flag next to `new_urls`, `raw_html` and `vendor_names`:
+bullets that start with a bold label, unspaced `--` outside code, and a spaced hyphen used as a
+dash, each with its line numbers.
 
 ### Failures and retries
 
@@ -106,36 +130,82 @@ again. Two exceptions:
   failure was an outage (5xx, 429, 529, network error) rather than about the request (a 400, a
   timeout). Then the run fails.
 
+## Prompts
+
+Each model stage owns its prompt next to the input builder and output parser that go with it:
+`TRIAGE_SYSTEM` and `triageUser` in `src/triage.mjs`, `WRITER_SYSTEM`, `writerPrefix`,
+`writerDocPart` and `correctionPart` in `src/writer.mjs`, `CHECKER_SYSTEM` and `checkerUser` in
+`src/checker.mjs`. Two constants are shared: `DOC_STYLE` in `src/prompting.mjs` holds the writing
+rules for any doc text, and `UNTRUSTED` marks repository text as data. Prompts stay in the tool
+rather than in `core/`, because no other tool shares them.
+
+`DOC_STYLE` gives way to the consumer. The docs in `<guidelines>` (the consumer's `AGENTS.md` plus
+any nested one above a changed file) and the voice of the doc and its neighbours win over the
+defaults. Two rules hold whatever the guidelines say: no en or em dashes in prose, with no `--` or
+spaced hyphen standing in for one, and no attribution. `WRITER_SYSTEM` includes `DOC_STYLE`
+verbatim and adds one set of rules per case: update, create, link fix-up. `CHECKER_SYSTEM` gets
+`<guidelines>` too, so it can tell the repo's voice from a style problem, and its style modes are
+always `should`.
+
+Prompt prose follows the same rules as the docs. `test/prompts.test.mjs` scans every prompt for en
+and em dashes, for `--` in prose and for the shouted `ONLY`, `COMPLETE`, `NOT` and `NEVER`. It
+also pins the `DOC_STYLE` precedence paragraph and both hard rules, that `WRITER_SYSTEM` contains
+`DOC_STYLE` and no "two hyphens" instruction, that the checker no longer lists "model or vendor
+names" as a violation, that `correctionPart` applies style notes only to lines already changed,
+that `checkerUser` renders `<guidelines>` first, and the four-backtick output contract that
+`parseWriterOutput` depends on.
+
+Other suites pin phrases the parsers and the plan rely on: the JSON action shape in
+`triage.test.mjs`, the delete rules in `checker.test.mjs`, the writer's link rules in
+`writer.test.mjs`, the `<reviewer_decisions>` block and the writer's "keep every existing link to
+a doc whose delete a reviewer reverted" in `carry.test.mjs`, and the `<exemplar>`, duplicate-scope
+and index-link phrases in `plan.test.mjs`.
+
+Prose cannot be unit-tested, so compare drafts before and after a prompt change.
+`TRIAGE_ONLY=1` is free; the writer comparison costs a few dry runs.
+
+1. Pick two or three ranges with a mix of updates and a create. The usual one is this repo at
+   `SINCE=c471546`, the range `c471546..4ae6408` that produced the doc edits merged in #9.
+2. Run each range with `DRY_RUN=1` from the released tag and from the branch, as in
+   [Running locally](#running-locally). `DRY_RUN` moves the cursor, so use a sandbox fork or put
+   the cursor back with `git push -f origin <sha>:refs/ai-docs-sync/cursor`.
+3. Compare the drafts: `rg '[–—]| -- '` must find nothing in prose, hype words and bold-label
+   bullets should be gone from added text, untouched paragraphs must be identical, and no doc may
+   hit the size gate because of restyling.
+
 ## Rolling branch
 
-- Always **the target head plus one commit** by `github-actions[bot]` holding every open edit.
-  The tree is built with git plumbing in a throwaway index, so the working tree never changes.
-- **Signed commit.** The commit is created through the Git Data API with `COMMIT_TOKEN` (the
-  Actions token) and no custom author, the only way GitHub signs it, so "require signed commits"
-  rules pass. Its blobs and tree are recreated on GitHub first, and every returned SHA must equal
-  the local one. GitHub is the committer; `isBotCommit` and `isToolCommit` know it by its bot
-  author. Without `COMMIT_TOKEN` the bot is set as author and the commit stays unsigned.
-- **Push.** The commit is fetched by SHA and pushed with `GITHUB_TOKEN` and `--force-with-lease`
-  pinned to the branch state the tool inspected, so a `DOCS_SYNC_TOKEN` push still triggers CI.
-- **Ownership.** Besides the tool's commits, the branch may hold merges and other people's
-  commits that only add, edit, delete or rename editable docs (a rename counts only when both
-  paths are editable). Anything else, or a branch the tool never committed to, makes the run
-  refuse before any paid call.
-- **Carry-forward.** While a PR from the rolling branch into the target is open, its edits and
-  deletes carry into the next run. If the target has since changed a carried file, the change is
-  discarded and the file goes back to triage with the earlier code changes it documented; triage
-  may select it again and redo it on the target's new version. If the target deleted the file,
-  the carried change is dropped. A new nomination beats a carried one: an update of a carried
-  delete restores the doc, a delete of a carried edit replaces the edit. After the PR is merged
-  or closed nothing carries.
-- **Reviewer decisions.** A reviewer's change on the branch beats the tool's while the PR stays
-  open: a deleted doc stays deleted, a renamed doc keeps its new path (links retargeted), a
-  deleted new doc is not created again, a restored doc is not deleted again. If the target later
-  changes a doc a reviewer deleted, the delete is discarded and reported. Because every run
-  rebuilds the branch and drops reviewers' commits, decisions are recorded in a
-  `Reviewer decisions:` section of the tool's commit message and read back next run, rechecked
-  against the branch. Forging those lines is harmless: a decision can only stop a write, never
-  cause one, and each is checked against the allowlist and the branch tree before use.
+The branch is always the target head plus one commit by `github-actions[bot]` holding every open
+edit. The tree is built with git plumbing in a throwaway index, so the working tree never changes.
+
+The commit is signed. It is created through the Git Data API with `COMMIT_TOKEN` (the Actions
+token) and no custom author, the only way GitHub signs it, so "require signed commits" rules pass.
+Its blobs and tree are recreated on GitHub first, and every returned SHA must equal the local one.
+GitHub is the committer; `isBotCommit` and `isToolCommit` know it by its bot author. Without
+`COMMIT_TOKEN` the bot is set as author and the commit stays unsigned.
+
+The push fetches the commit by SHA and pushes it with `GITHUB_TOKEN` and `--force-with-lease`
+pinned to the branch state the tool inspected, so a `DOCS_SYNC_TOKEN` push still triggers CI.
+
+Besides the tool's commits, the branch may hold merges and other people's commits that only add,
+edit, delete or rename editable docs (a rename counts only when both paths are editable).
+Anything else, or a branch the tool never committed to, makes the run refuse before any paid call.
+
+While a PR from the rolling branch into the target is open, its edits and deletes carry into the
+next run. If the target has since changed a carried file, the change is discarded and the file
+goes back to triage with the earlier code changes it documented; triage may select it again and
+redo it on the target's new version. If the target deleted the file, the carried change is
+dropped. A new nomination beats a carried one: an update of a carried delete restores the doc, a
+delete of a carried edit replaces the edit. After the PR is merged or closed nothing carries.
+
+A reviewer's change on the branch beats the tool's while the PR stays open: a deleted doc stays
+deleted, a renamed doc keeps its new path (links retargeted), a deleted new doc is not created
+again, a restored doc is not deleted again. If the target later changes a doc a reviewer deleted,
+the delete is discarded and reported. Because every run rebuilds the branch and drops reviewers'
+commits, decisions are recorded in a `Reviewer decisions:` section of the tool's commit message
+and read back next run, rechecked against the branch. Forging those lines is harmless: a decision
+can only stop a write, never cause one, and each is checked against the allowlist and the branch
+tree before use.
 
 ## PR body
 
@@ -168,8 +238,9 @@ a dry run, a published PR. A failed run leaves it. `TRIAGE_ONLY` never moves it.
 - The diff, commit messages and PR bodies are data and only ever go in user turns.
 - The writer loads the target branch's guidelines, never a draft from the same run.
 - No write credential is persisted in the checkout. Only the push and cursor-update child
-  processes get a token (`GITHUB_TOKEN`; `COMMIT_TOKEN` is only used for API calls), via env, from a throwaway git dir that borrows the checkout's objects,
-  so no hook or config written into `.git` runs next to it. `setup_command` is not sandboxed.
+  processes get a token (`GITHUB_TOKEN`; `COMMIT_TOKEN` is only used for API calls), via env, from
+  a throwaway git dir that borrows the checkout's objects, so no hook or config written into
+  `.git` runs next to it. `setup_command` is not sandboxed.
 - The force-push target is validated: never the target or default branch, safe charset only.
 
 ## Changing a model
@@ -177,10 +248,10 @@ a dry run, a published PR. A failed run leaves it. `TRIAGE_ONLY` never moves it.
 Edit `DEFAULTS` in `src/config.mjs`, then check two places in `core/models.mjs`, which every tool
 shares:
 
-1. **`PRICES`**: add the new model, or the cost line reports it as unpriced and leaves it out of
-   the total.
-2. **`EFFORT_MODELS`** / **`REASONING_MODELS`**: regexes gating Anthropic `output_config.effort`
-   and OpenAI `reasoning.effort`. A model that does not match silently loses its effort config
+1. `PRICES`: add the new model, or the cost line reports it as unpriced and leaves it out of the
+   total.
+2. `EFFORT_MODELS` and `REASONING_MODELS`: regexes gating Anthropic `output_config.effort` and
+   OpenAI `reasoning.effort`. A model that does not match silently loses its effort config
    rather than erroring.
 
 Then update the models named in the README's Secrets section.
