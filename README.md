@@ -1,7 +1,7 @@
 # ai-tools
 
-AI workflows for GitHub pull requests and repositories, shipped as reusable workflows. One repo,
-one shared core, one release tag per tool.
+AI tools for GitHub pull requests and repositories, shipped as reusable workflows. The tools
+share the code in `core/`, and each one is released under its own tag.
 
 | Tool | Kind | What it does |
 | --- | --- | --- |
@@ -20,7 +20,8 @@ consumer calls the tool's reusable workflow at its release tag:
 uses: acid-info/ai-tools/.github/workflows/<tool>.yml@<tool>/v1
 ```
 
-The tag moves with each release. Pin a commit SHA instead for immutability.
+The tag moves with each release. Pin a commit SHA instead if you want code that never changes
+under you.
 
 ## Development
 
@@ -52,10 +53,10 @@ release a reader turn it into a writer everywhere.
 
 Two repository rulesets enforce this, and repo admins can bypass both:
 
-- **Protect master and develop**: changes land only through a pull request, and neither branch
-  can be deleted.
-- **Only admins push tags**: creating, moving or deleting any tag is admin-only, so only admins
-  can release a tool.
+| Ruleset | Covers | Rule |
+| --- | --- | --- |
+| Protect master and develop | `master`, `develop` | Changes land only through a pull request; neither branch can be deleted. |
+| Only admins push tags | every tag | Only admins can create, move or delete a tag, so only admins can release a tool. |
 
 In every tool, the job never runs PR-authored code, the caller's `permissions:` block bounds what
 it can do, and model output is defused before it is posted. Consumers pass secrets explicitly,
