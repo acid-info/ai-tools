@@ -141,22 +141,48 @@ Guideline files such as `AGENTS.md` and `CLAUDE.md` are edited like any other do
 `doc_paths` covers them, and any edit or delete of one is bannered at the top of the PR with its
 diff. List them in `never_touch` to keep them hand-maintained.
 
+## How it writes
+
+New docs and the text it adds or changes in existing docs follow one style: lead with what the
+thing is for or with the command the reader came for, explain why when the diff gives a reason,
+use active verbs and plain words, address the reader as "you" and the team as "we", and keep one
+term for one thing. No hype words, no bullets that start with a bold label, no emoji, headings in
+sentence case, and tables only for reference data with short cells.
+
+Your guidelines win on voice. The first file in `guidelines_files` that exists is loaded, plus any
+nested `AGENTS.md` above a changed file, and the tool writes in their voice and keeps the doc's
+own terms. Two rules hold whatever they say: no en or em dashes in prose, with no `--` or spaced
+hyphen standing in for one, and no attribution ("Generated with", "Co-Authored-By"). Guidelines
+that ask for em dashes still lose them.
+
+Dashes are fixed twice. A dash, or an attribution string, on a line the tool adds becomes a `must`
+issue for the single correction pass, so the writer fixes it with the paragraph around it.
+Whatever survives that (the correction failed, or the writer left a dash in) is replaced by
+gate 4, which turns a number range into a hyphen, a pair into parentheses and a single dash into a
+colon or a comma. The PR body names every line it changed, so check they read well. Attribution
+that survives the correction drops the doc.
+
+It only restyles text it has to change. A paragraph the diff invalidates is rewritten around its
+main point; a paragraph the edit does not touch keeps its wording. Style notes from the checker
+and the "Style to check (not blocking)" list in the PR body advise a reviewer; neither holds a doc
+back.
+
 ## Reviewing the rolling PR
 
 There is one rolling branch and one PR per repo, updated in place by every run.
 
-- **Merge** it to accept the changes. **Close** it to drop them all; the next run that has
-  something to say opens a fresh PR.
+- Merge it to accept the changes, or close it to drop them all; the next run that has something to
+  say opens a fresh PR.
 - Unmerged changes carry over to the next run. If your target branch changes a file the PR also
   changes, the tool drops its version and redoes it on top of yours if it is still needed.
 - You can push to the branch: edit, add, delete or rename docs within `doc_paths`, or use
   "Update branch". Any other commit (code, other files) makes the tool refuse to run until the
   branch is renamed or deleted.
-- **Your changes win** while the PR is open. A doc you delete stays deleted, a doc you restore
-  stays, and links follow a rename. The PR body lists these under "Reviewer changes on this
-  branch", with how to undo each.
-- **To reject a new doc**, delete it and revert the index doc's link to it in the same commit.
-  The tool will not create it again while the PR stays open.
+- Your changes win while the PR is open. A doc you delete stays deleted, a doc you restore stays,
+  and links follow a rename. The PR body lists these under "Reviewer changes on this branch",
+  with how to undo each.
+- To reject a new doc, delete it and revert the index doc's link to it in the same commit. The tool
+  will not create it again while the PR stays open.
 - The PR body explains every change: why the doc was picked, what the checker said, and which
   commits and PRs it came from.
 
