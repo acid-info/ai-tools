@@ -1,6 +1,7 @@
 import { mapConcurrent } from '#core/text.mjs';
 
 import { CHECKER_SYSTEM, checkInBatches, checkerUser, decideAfterCheck, parseChecker } from '../checker.mjs';
+import { mechanicalIssues } from '../gates.mjs';
 import { unifiedDiff } from '../linediff.mjs';
 import { dropOrphanedDependents } from '../plan.mjs';
 import { correctionPart } from '../writer.mjs';
@@ -30,7 +31,10 @@ export async function checkDocs(ctx) {
   const toCorrect = [];
   let candidates = [];
   for (const d of toCheck) {
-    const decision = decideAfterCheck(verdicts.get(d.path), d.action);
+    // Dashes and attribution found by code join the model's issues, so the correction fixes them.
+    const mechanical = mechanicalIssues(d);
+    const verdict = verdicts.get(d.path);
+    const decision = decideAfterCheck(mechanical.length ? { ...verdict, issues: [...(verdict?.issues ?? []), ...mechanical] } : verdict, d.action);
     const entry = { ...d, check: decision };
     if (decision.action === 'drop') heldBack.push({ path: d.path, reason: 'checker: drop' + (decision.issues.length ? ` (${decision.issues.map((i) => i.note).join('; ')})` : '') });
     else if (decision.action === 'correct') toCorrect.push(entry);

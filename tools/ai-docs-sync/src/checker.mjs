@@ -135,13 +135,17 @@ export function parseChecker(text) {
   return files;
 }
 
-// The single-correction rule and its bookkeeping, as a pure decision.
+// The single-correction rule and its bookkeeping, as a pure decision. `verdictEntry` may carry
+// issues from the code pre-check (`source: 'style'`) and no verdict when the checker failed.
+// A style "must" asks for a correction whatever the model said, except that a drop still wins.
 export function decideAfterCheck(verdictEntry, action = 'update') {
-  if (!verdictEntry) return { action: 'proceed', unchecked: true, issues: [] };
-  const { verdict, issues } = verdictEntry;
-  const must = verdict === 'revise' && issues.some((i) => i.severity === 'must');
+  const verdict = verdictEntry?.verdict;
+  const issues = verdictEntry?.issues ?? [];
+  const unchecked = verdict == null ? { unchecked: true } : {};
+  const must = verdict === 'revise' && issues.some((i) => i.severity === 'must' && i.source !== 'style');
+  const styleMust = action !== 'delete' && issues.some((i) => i.severity === 'must' && i.source === 'style');
   if (verdict === 'drop' || (must && action === 'delete')) return { action: 'drop', issues };
-  if (must) return { action: 'correct', issues };
-  return { action: 'proceed', issues };
+  if (must || styleMust) return { action: 'correct', ...unchecked, issues };
+  return { action: 'proceed', ...unchecked, issues };
 }
 

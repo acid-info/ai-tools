@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { CHECKER_SYSTEM, checkerUser } from '../src/checker.mjs';
 import { DOC_STYLE, UNTRUSTED } from '../src/prompting.mjs';
 import { TRIAGE_SYSTEM } from '../src/triage.mjs';
-import { WRITER_SYSTEM } from '../src/writer.mjs';
+import { WRITER_SYSTEM, correctionPart } from '../src/writer.mjs';
 
 const PROMPTS = { DOC_STYLE, UNTRUSTED, TRIAGE_SYSTEM, WRITER_SYSTEM, CHECKER_SYSTEM };
 
@@ -38,6 +38,11 @@ describe('prompt text', () => {
     assert.match(WRITER_SYSTEM, /nor its habits/);
     assert.match(WRITER_SYSTEM, /Link fix-ups and index updates[^\n]*:\n- Change only the sentence that holds the link/);
     assert.match(WRITER_SYSTEM, /opens with four\nbackticks on its own line \(````markdown\)/, 'output contract unchanged');
+  });
+
+  test('a correction applies style notes only to lines already changed', () => {
+    const text = correctionPart({ draft: '# d\n', issues: [{ severity: 'should', note: 'hype word' }] });
+    assert.match(text, /Apply "should" style notes only to lines you already changed\./);
   });
 
   test('triage asks a create to name its one job and reader, in plain words', () => {

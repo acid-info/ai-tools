@@ -79,7 +79,7 @@ export function writerDocPart({ path: p, action, reason, sourcePatches, current,
 
 export function correctionPart({ draft, issues }) {
   const list = issues.map((i) => `- [${i.severity}] ${i.note}`).join('\n');
-  return `<draft>\n${draft}\n</draft>\n\n<checker_issues>\n${list}\n</checker_issues>\n\nRevise your draft to address every "must" issue and any "should" issue you agree with. Output the complete corrected file as before.`;
+  return `<draft>\n${draft}\n</draft>\n\n<checker_issues>\n${list}\n</checker_issues>\n\nRevise your draft to address every "must" issue and any "should" issue you agree with. Apply "should" style notes only to lines you already changed. Output the complete corrected file as before.`;
 }
 
 // Takes the first opening fence and the last closing fence of the same kind and at least the
