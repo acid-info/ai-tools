@@ -42,6 +42,17 @@ consumer guide is [README.md](README.md).
 
 Model calls, retries, pricing, GitHub access and guideline loading come from `core/`.
 
+## Prompts
+
+The models write the `issue`, `suggested_fix`, `overall` and `summary` fields, and `post.mjs`
+posts them on the PR as written. So `reviewPrompt` and `synthesisPrompt` both end with
+`WRITING_GUIDE` in `src/prompts.mjs`, which tells the models how to write those fields: lead with
+the problem or the main risk, name the file or value, use plain words, no hype words and no
+dashes in prose. The prompt text follows the same rules. `test/prompts.test.mjs` pins them (no
+dashes or shouted words in any prompt, the writing rules in both, the JSON keys and severity
+guide unchanged, since `parseReview` and `post.mjs` read them), and `test/post.test.mjs` checks
+the rendered review has no dashes and no warning or robot emoji.
+
 ## Configuration
 
 `DEFAULTS` in `src/config.mjs` owns models, `synth_effort`, `min_severity_to_post`,
@@ -54,12 +65,12 @@ and is ignored. `ignore` and `guidelines_files` replace the default, `extra_igno
 Edit `DEFAULTS` in `src/config.mjs`, then check two places in `core/models.mjs`, which every tool
 shares:
 
-1. **`PRICES`**: add the new model, or the API usage table reports it as unpriced and leaves it
+1. Add the new model to `PRICES`, or the API usage table reports it as unpriced and leaves it
    out of the total. Cache reads cost a tenth of input unless `cacheRead` says otherwise.
-2. **`EFFORT_MODELS`** / **`REASONING_MODELS`**: regexes gating `output_config.effort` (Claude)
-   and `reasoning.effort` (OpenAI). A model that does not match **silently loses its effort
-   config** rather than erroring. Haiku 4.5, Sonnet 4.5 and older Claude models reject effort, as
-   do non-reasoning OpenAI models.
+2. Check that it matches `EFFORT_MODELS` (Claude) or `REASONING_MODELS` (OpenAI), the regexes
+   that gate `output_config.effort` and `reasoning.effort`. A model that does not match loses its
+   effort config without any error. Haiku 4.5, Sonnet 4.5 and older Claude models reject effort,
+   as do non-reasoning OpenAI models.
 
 `synth_model` picks its provider from its name: `claude-*` goes to Anthropic, anything else to
 OpenAI. Keep `synth_effort` to a level both providers accept (`low`, `medium`, `high`): when

@@ -30,13 +30,13 @@ jobs:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
-- **`issue_comment` workflows only run from the default branch**, so you cannot test this from a
-  PR branch. Merge the file first, then comment `/ai-review` on a PR. Merging it early is safe:
-  nothing runs until someone types the command.
+- GitHub runs `issue_comment` workflows only from the default branch, so you cannot test this
+  from a PR branch. Merge the file first, then comment `/ai-review` on a PR. Merging it early is
+  safe: nothing runs until someone types the command.
 - Only comments from an `OWNER`, `MEMBER` or `COLLABORATOR` trigger a review, so a drive-by
   comment on a public repo cannot spend your API budget.
-- Pass the secrets explicitly. Do **not** use `secrets: inherit`: the reviewer has no business
-  seeing an `NPM_TOKEN` or a database URL.
+- Pass the secrets explicitly instead of `secrets: inherit`: the reviewer has no business seeing
+  an `NPM_TOKEN` or a database URL.
 - `ai-review/v1` is a moving tag. Pin a commit SHA instead for immutability.
 
 ### Secrets
@@ -55,8 +55,8 @@ Optional, at `.github/ai-review.yml` on your default branch. Three keys:
 
 | Key | Effect |
 | --- | --- |
-| `extra_ignore` | Appended to the built-in ignore list. **Use this one.** |
-| `ignore` | Replaces the built-in ignore list wholesale. |
+| `extra_ignore` | Appended to the built-in ignore list. Prefer it to `ignore`. |
+| `ignore` | Replaces the built-in ignore list wholesale, so restate any default you still want. |
 | `guidelines_files` | Priority list of guideline files; the first that exists is loaded. |
 
 ```yaml
@@ -78,10 +78,21 @@ config logs a warning and does nothing.
 
 ## What gets posted
 
-- Issues of `major` severity and above, inline where they map to a diff line, with a summary.
-- An **API usage** table: tokens and estimated cost per model call, plus the total.
-- A note whenever the review is partial: a provider was down, synthesis failed, or files were too
-  large to review.
+One PR review headed `## AI review (<claude model> + <openai model>)`. It opens with the merged
+summary of the main risks, then the number of critical and other issues shown.
+
+Issues of `major` severity and above are posted inline where they map to a diff line, and listed
+in the body where they do not. Each one opens with its severity and category, such as
+`🟠 Major (bug)`, and ends with a suggested fix when there is one. An inline comment also says
+"flagged by both models" when both reviewers found the issue.
+
+The body states every way the review fell short: lines starting `Partial review:` for files that
+were not reviewed, `Single-model review:` when a reviewer failed, and a note when a reviewer's
+answer could not be parsed or synthesis failed. An `API usage` table follows, with tokens and
+estimated cost per model call and the total.
+
+When nothing is left to review after filtering, the reviewer posts a plain comment instead,
+starting `AI review could not run.` with the reasons, or saying it found nothing reviewable.
 
 ## Security
 
