@@ -46,5 +46,6 @@ describe('reviewers and synthesis', () => {
       assert.deepEqual(r.merged, localMerge(reviewA, reviewB));
     }
     assert.deepEqual(localMerge(reviewA, reviewB).issues.map((i) => i.severity), ['critical', 'minor']);
+    assert.equal(localMerge(reviewA, reviewB).summary, 'A\n\nB');
   });
 });
