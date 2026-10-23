@@ -113,11 +113,9 @@ export function renderPrBody({
       if (g) head.push(...banner(g.kind, k.path, g.detail, detail, reviewer.includes(k)));
     }
     head.push(
-      `Automated documentation update for ${inlineCode(target)}.`,
-      '',
-      `**Range:** \`${short7(from)}..${short7(to)}\` on ${inlineCode(target)}, ${commitCount} commit(s)` +
+      `Range: \`${short7(from)}..${short7(to)}\` on ${inlineCode(target)}, ${commitCount} commit(s)` +
         (capped ? ' (capped: older commits were not processed)' : '') +
-        (runUrl ? ` -- [run](${runUrl})` : '')
+        (runUrl ? ` ([run](${runUrl}))` : '')
     );
     head.push(
       ...sec(
@@ -126,7 +124,7 @@ export function renderPrBody({
           if (!detail) return [`- ${inlineCode(d.path)} (deleted)`];
           const linkers = d.flags?.find((f) => f.kind === 'broken_inbound_links')?.detail ?? [];
           return [
-            `- ${inlineCode(d.path)} -- ${defuse(d.reason)}`,
+            `- ${inlineCode(d.path)}: ${defuse(d.reason)}`,
             ...checkerLines(d, notes),
             ...(linkers.length ? [`  - Still linked from, not fixed here: ${linkers.slice(0, 20).map((l) => inlineCode(l)).join(', ')}${linkers.length > 20 ? `, and ${linkers.length - 20} more` : ''}`] : []),
             ...(repo ? [`  - To restore it: [${short7(to)} copy](${blobUrl(repo, to, d.path)})`] : []),
@@ -143,7 +141,7 @@ export function renderPrBody({
           const unlinked = k.flags?.find((f) => f.kind === 'unlinked_new_doc');
           const linkers = k.linkedFrom ?? [];
           return [
-            `- ${inlineCode(k.path)} -- ${defuse(k.reason)}`,
+            `- ${inlineCode(k.path)}: ${defuse(k.reason)}`,
             ...checkerLines(k, notes),
             ...(flags && (k.dashFixes?.length || k.dashesLeft?.length) ? [`  - ${describeDashFixes(k.dashFixes, k.dashesLeft)}`] : []),
             linkers.length
@@ -157,7 +155,7 @@ export function renderPrBody({
         edited.flatMap((k) =>
           detail
             ? [
-                `- ${inlineCode(k.path)} (${k.action}) -- ${defuse(k.reason)}`,
+                `- ${inlineCode(k.path)} (${k.action}): ${defuse(k.reason)}`,
                 ...checkerLines(k, notes),
                 ...(flags && (k.dashFixes?.length || k.dashesLeft?.length) ? [`  - ${describeDashFixes(k.dashFixes, k.dashesLeft)}`] : []),
               ]
@@ -179,8 +177,8 @@ export function renderPrBody({
         )
       ),
       ...sec('Held back', [
-        ...dropped.map((d) => (detail ? `- ${inlineCode(d.path)} -- gate ${d.gate}: ${defuse(d.reason)}` : `- ${inlineCode(d.path)} (gate ${d.gate})`)),
-        ...heldBack.map((h) => (detail ? `- ${inlineCode(h.path)} -- ${defuse(h.reason)}` : `- ${inlineCode(h.path)}`)),
+        ...dropped.map((d) => (detail ? `- ${inlineCode(d.path)} (gate ${d.gate}): ${defuse(d.reason)}` : `- ${inlineCode(d.path)} (gate ${d.gate})`)),
+        ...heldBack.map((h) => (detail ? `- ${inlineCode(h.path)}: ${defuse(h.reason)}` : `- ${inlineCode(h.path)}`)),
       ]),
       ...(flags
         ? sec(
@@ -196,7 +194,7 @@ export function renderPrBody({
         : []),
       ...sec(
         'Suggested deletions (not acted on)',
-        suggestedDeletes.map((d) => (detail ? `- ${inlineCode(d.path)} -- ${defuse(d.reason)}${d.why ? ` (${defuse(d.why)})` : ''}` : `- ${inlineCode(d.path)}`))
+        suggestedDeletes.map((d) => (detail ? `- ${inlineCode(d.path)}: ${defuse(d.reason)}${d.why ? ` (${defuse(d.why)})` : ''}` : `- ${inlineCode(d.path)}`))
       ),
       ...sec('Diff not shown to the models (over budget)', omittedDiff.slice(0, 100).map((p) => `- ${inlineCode(p)}`)),
     ];
