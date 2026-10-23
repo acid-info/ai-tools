@@ -85,7 +85,10 @@ describe('PR body', () => {
         check: { action: 'correct', issues: [{ severity: 'must', note: 'Claims hCaptcha <b>still</b> runs' }] },
         corrected: true,
         dashFixes: [{ line: 4, before: 'a \u2014 b', after: 'a: b', count: 1 }, { line: 9, before: 'c \u2014 d', after: 'c: d', count: 1 }],
-        flags: [{ kind: 'new_urls', detail: ['https://evil.example/@x'] }],
+        flags: [
+          { kind: 'new_urls', detail: ['https://evil.example/@x'] },
+          { kind: 'style', detail: ['bullet starting with a bold label on line 7'] },
+        ],
       },
       {
         path: 'AGENTS.md',
@@ -132,7 +135,7 @@ describe('PR body', () => {
     assert.ok(body.startsWith('> [!WARNING]\n> **Guideline file deleted: `apps/crm/CLAUDE.md`.**'), 'delete banner at the very top');
     assert.match(body, /> \*\*Guideline file edited: `AGENTS\.md`\.\*\*/);
     assert.match(body, /````diff\n[\s\S]*\+new ``` closes #​3\n````/, 'fence outlasts the backticks in the diff, keyword defused');
-    const headings = ['Deleted this run', 'Edited this run', 'Carried forward', 'Earlier changes discarded because `develop` changed the file', 'Held back', 'New links, raw HTML and vendor names to check', 'Suggested deletions (not acted on)', 'Diff not shown', 'Commits and PRs in this range', 'API usage'];
+    const headings = ['Deleted this run', 'Edited this run', 'Carried forward', 'Earlier changes discarded because `develop` changed the file', 'Held back', 'New links, raw HTML and vendor names to check', 'Style to check (not blocking)', 'Suggested deletions (not acted on)', 'Diff not shown', 'Commits and PRs in this range', 'API usage'];
     for (const h of headings) assert.ok(body.includes(`\n#### ${h}`), h);
     const at = headings.map((h) => body.indexOf(`\n#### ${h}`));
     assert.deepEqual([...at].sort((x, y) => x - y), at, 'sections in order: deletes before edits');
@@ -143,6 +146,7 @@ describe('PR body', () => {
     assert.match(body, /Checker: \*\*unchecked\*\*/);
     assert.match(body, /\n  - 2 dashes replaced mechanically on lines 4, 9; check they read well\n/);
     assert.match(body, /\n  - dash left on line 5: it pairs with a line this run did not change\n/);
+    assert.match(body, /#### Style to check \(not blocking\)\n- `docs\/api\.md`: bullet starting with a bold label on line 7\n/);
     assert.match(body, /- `docs\/crm \(old\)\.md` -- CRM app removed\n  - Checker: ok\n  - Still linked from, not fixed here: `docs\/specs\/x\.md`\n  - To restore it: \[bbbbbbb copy\]\(https:\/\/github\.com\/o\/r\/blob\/b{40}\/docs\/crm%20%28old%29\.md\)/);
     assert.match(body, /`README\.md` \(from `1111111\.\.2222222`\)/);
     assert.match(body, /- `docs\/was\.md` \(deleted\)/);

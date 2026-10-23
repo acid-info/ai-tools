@@ -75,6 +75,7 @@ const UNSPACED_DOUBLE_RE = /(?<!-)--(?!-)/;
 const SPACED_HYPHEN_RE = /(?<=[^\s|]) - (?=[^\s|])/;
 // A table cell holding only a dash means "none"; it is not punctuation.
 const DASH_CELL_RE = /(?<=\|)([ \t]*)([\u2013\u2014]|-{1,2})([ \t]*)(?=\|)/g;
+const BOLD_BULLET_RE = /^\s*(?:>\s*)*(?:[-*+]|\d+[.)])\s+(\*\*|__)\S/;
 
 function frontMatterEnd(lines) {
   if (lines[0]?.trimEnd() !== '---') return -1;
@@ -333,7 +334,9 @@ export function gateFlags(file, { current, isGuideline }) {
   const newTags = new Set();
   const vendors = new Set();
   const inFence = fencedLines(lines);
-  for (const i of added) {
+  const proseOf = proseLines(lines);
+  const style = { bold: [], unspaced_double: [], spaced_hyphen: [] };
+  for (const i of [...added].sort((a, b) => a - b)) {
     const line = lines[i];
     for (const u of line.match(URL_RE) ?? []) if (!oldUrls.has(u)) newUrls.add(u);
     // Markdown renders tags inside code as text, so only prose is scanned; URLs are flagged anywhere.
@@ -345,10 +348,20 @@ export function gateFlags(file, { current, isGuideline }) {
     }
     const v = line.match(VENDOR_RE);
     if (v) vendors.add(v[0]);
+    if (!proseOf[i]) continue;
+    if (BOLD_BULLET_RE.test(proseOf[i].text)) style.bold.push(i + 1);
+    for (const kind of dashKinds(proseOf[i].text)) if (style[kind]) style[kind].push(i + 1);
   }
+  const at = (nums) => `${nums.length === 1 ? 'line' : 'lines'} ${nums.join(', ')}`;
+  const styleDetail = [
+    ...(style.bold.length ? [`bullet starting with a bold label on ${at(style.bold)}`] : []),
+    ...(style.unspaced_double.length ? [`double hyphen outside code on ${at(style.unspaced_double)}`] : []),
+    ...(style.spaced_hyphen.length ? [`spaced hyphen used as a dash on ${at(style.spaced_hyphen)}`] : []),
+  ];
   if (newUrls.size) flags.push({ kind: 'new_urls', detail: [...newUrls] });
   if (newTags.size) flags.push({ kind: 'raw_html', detail: [...newTags] });
   if (vendors.size) flags.push({ kind: 'vendor_names', detail: [...vendors] });
+  if (styleDetail.length) flags.push({ kind: 'style', detail: styleDetail });
   if (isGuideline) flags.push({ kind: 'guideline_edit', detail: unifiedDiff(before, file.content, file.path) });
   return { ok: true, flags };
 }

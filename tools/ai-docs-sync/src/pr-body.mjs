@@ -188,6 +188,12 @@ export function renderPrBody({
             kept.flatMap((k) => (k.flags ?? []).filter((f) => FLAG_NAMES[f.kind]).map((f) => `- ${inlineCode(k.path)}: ${flagText(f)}`))
           )
         : []),
+      ...(flags
+        ? sec(
+            'Style to check (not blocking)',
+            kept.flatMap((k) => (k.flags ?? []).filter((f) => f.kind === 'style').map((f) => `- ${inlineCode(k.path)}: ${f.detail.join('; ')}`))
+          )
+        : []),
       ...sec(
         'Suggested deletions (not acted on)',
         suggestedDeletes.map((d) => (detail ? `- ${inlineCode(d.path)} -- ${defuse(d.reason)}${d.why ? ` (${defuse(d.why)})` : ''}` : `- ${inlineCode(d.path)}`))

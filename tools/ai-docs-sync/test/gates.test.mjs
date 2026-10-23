@@ -201,9 +201,11 @@ describe('gates', () => {
     assert.equal(describeDashFixes([{ line: 14, count: 2 }, { line: 37, count: 1 }]), '3 dashes replaced mechanically on lines 14, 37; check they read well');
   });
 
-  test('gate 4: an unspaced double hyphen and a spaced hyphen are left alone', () => {
+  test('gate 4: an unspaced double hyphen and a spaced hyphen are left for the reviewer', () => {
     const line = 'Pass --greeting to it, or compute a - b.';
     assert.equal(restyle(line), line);
+    const flag = gateFlags({ path: 'x', content: `${line}\n` }, { current: '', isGuideline: false }).flags.find((f) => f.kind === 'style');
+    assert.deepEqual(flag.detail, ['double hyphen outside code on line 1', 'spaced hyphen used as a dash on line 1']);
   });
 
   test('gate 4: attribution on a changed line still drops the file', () => {
@@ -244,6 +246,14 @@ describe('gates', () => {
     assert.match(g.flags.find((f) => f.kind === 'guideline_edit').detail, /\+new rule/);
     const v = gateFlags({ path: 'x', content: 'Reviewed by Anthropic models.\n' }, { current: '', isGuideline: false });
     assert.deepEqual(v.flags.find((f) => f.kind === 'vendor_names').detail, ['Anthropic']);
+  });
+
+  test('gate 5: the style flag lists bold-label bullets on added lines only', () => {
+    const current = '# t\n\n- **Old:** kept as it was\n';
+    const content = current + '- **Fast:** new\n1. __Pick one.__ Then go.\n- `**not bold**` in code\n- plain **bold** later\n\n```\n- **in a fence**\n```\n';
+    const r = gateFlags({ path: 'x', content }, { current, isGuideline: false });
+    assert.deepEqual(r.flags.find((f) => f.kind === 'style').detail, ['bullet starting with a bold label on lines 4, 5']);
+    assert.equal(gateFlags({ path: 'x', content: current + 'Plain line.\n' }, { current, isGuideline: false }).flags.length, 0);
   });
 
   test('gate 5: tags inside code spans and fences are text, not HTML; URLs there are still flagged', () => {
