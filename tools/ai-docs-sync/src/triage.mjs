@@ -19,15 +19,18 @@ covers, and documenting it inside an existing doc would be out of that doc's sco
 bloat it. Otherwise prefer an "update" of the closest existing doc. A new app or package with no
 README, when a sibling has one, is the typical case. A create's path must follow its neighbours
 in the manifest: the same directory as comparable docs, the same file naming style (case,
-separators, README.md vs index.md). Its reason states what the new doc covers and which
-existing doc should link to it.
+separators, README.md vs index.md). Its reason names the new doc's one job (a how-to, a
+reference or an explanation), who reads it, and which existing doc should link to it.
 Nominate a "delete" only when the doc's whole subject no longer exists in the code after this
 change: a removed app, package, feature, command, endpoint or config area. A doc that is only
 partly invalidated is an "update". Never merge or consolidate docs. A delete's source_files must
 name the diff files that removed the subject; judge by the diff, not by what the narrative claims.
+
+Reasons are posted in the pull request for reviewers: write them in plain words, one idea per
+clause, with no en or em dashes and no "--" standing in for one.
 ${UNTRUSTED}
 
-Respond with ONLY a JSON object, no markdown fences:
+Respond with only a JSON object, no markdown fences:
 {
   "affected": [
     { "path": "docs/x.md", "action": "update" | "create" | "delete",

@@ -5,30 +5,47 @@ import { DEFAULTS } from './config.mjs';
 import { UNTRUSTED } from './prompting.mjs';
 
 export const CHECKER_SYSTEM = `You review documentation changes that another model made in response to a code change. You
-are given the change narrative, the code diff, the manifest of editable docs, and for each doc:
-the reason it was selected and either the edit (a unified diff and the full new content) or,
-for action="delete", the source files cited and the content being deleted.
+are given the repository guidelines, the change narrative, the code diff, the manifest of
+editable docs, and for each doc: the reason it was selected and either the edit (a unified diff
+and the full new content) or, for action="delete", the source files cited and the content being
+deleted.
 
 For edits, look for exactly these failure modes, in priority order:
-1. Claims not supported by the diff or the narrative (hallucinated behaviour).
+1. Claims not supported by the diff or the narrative: hallucinated behaviour, or an invented
+   reason or number.
 2. Contradictions with the diff.
 3. Content that reflects the narrative's stated intent but not what the diff actually does.
-4. Content removed that the diff did not invalidate.
-5. Edits outside the sections the reason justifies (restyling, reordering, "improvements").
+4. Content removed that the diff did not invalidate, including a fact, command, path or link
+   target lost when a paragraph was rewritten around its main point. Always "must".
+5. Edits outside what the reason justifies. Rewriting a paragraph the diff invalidated is in
+   scope; restyling or reordering a paragraph the edit did not need to touch is not. "should",
+   unless it also loses content, which is mode 4.
 6. Broken or renamed links.
-7. Style violations: en/em dashes, attribution lines, model or vendor names.
+7. Writing style, on the lines <edit_diff> shows as added, or on the whole doc for a create:
+   hype words (robust, seamless, powerful, comprehensive, leverage, best practices), bullets
+   that start with a bold label, openers or closers about the page, trailing phrases that claim
+   importance, a contrast that argues with nobody, one term swapped for synonyms, restating what
+   a name already says. Always "should". Skip any rule the repository's <guidelines> contradict,
+   since the repository's voice wins. A model or vendor name is a problem only when it appears
+   as the author of the text; a doc may say that a tool calls a model. Code already checks
+   dashes and attribution, so do not report them.
 
 For action="create" (a new file), also look for:
 8. A scope that duplicates a doc already in the manifest (the note names that doc).
 9. A create the diff does not justify: nothing new, or small enough to belong in an existing doc.
 Either one is "drop" when it holds for the whole doc.
+10. A page doing more than one job (how-to, reference, explanation). "should".
+11. A README that ignores this order without a reason: what it is and who it is for, how to run
+    it, where things are, what usually trips people up, where to go next. "should".
+
+Style issues (modes 7, 10 and 11) alone never make a verdict "revise" or "drop".
 
 For a delete, the verdict is "ok" only when the diff shows the doc's whole subject gone from the
 code. Otherwise it is "drop": the subject still exists, or only part of it was removed. Never
 "revise" a delete.
 ${UNTRUSTED}
 
-Respond with ONLY a JSON object, no markdown fences:
+Respond with only a JSON object, no markdown fences:
 {
   "files": [
     { "path": "docs/x.md", "verdict": "ok" | "revise" | "drop",
@@ -37,7 +54,10 @@ Respond with ONLY a JSON object, no markdown fences:
 }
 "must" = the doc would state something false or lose something true; "should" = worth fixing,
 not wrong. "drop" only when the whole edit is unjustified. Do not invent problems.
-Changes in <earlier_diff>, when present, support a claim exactly as the diff does.`;
+Changes in <earlier_diff>, when present, support a claim exactly as the diff does.
+Notes are posted in the pull request for reviewers: each is one concrete sentence that names the
+line or phrase it is about, in plain words, with no en or em dashes and no "--" standing in for
+one.`;
 
 export function checkerDocBlock(d) {
   if (d.action === 'delete')
@@ -45,8 +65,9 @@ export function checkerDocBlock(d) {
   return `<doc path="${d.path}" action="${d.action}">\n<reason>${d.reason}</reason>\n<edit_diff>\n${d.editDiff || '(new file)'}\n</edit_diff>\n<new_content>\n${d.content}\n</new_content>\n</doc>`;
 }
 
-export function checkerUser({ narrative, diff, manifest = '', docs, stale = '' }) {
+export function checkerUser({ guidelines = '', narrative, diff, manifest = '', docs, stale = '' }) {
   return [
+    guidelines ? `<guidelines>\n${guidelines}\n</guidelines>` : '',
     `<narrative>\n${narrative}\n</narrative>`,
     `<diff>\n${diff}\n</diff>`,
     manifest ? `<manifest>\n${manifest}\n</manifest>` : '',

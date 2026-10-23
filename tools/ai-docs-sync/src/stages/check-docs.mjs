@@ -6,7 +6,7 @@ import { dropOrphanedDependents } from '../plan.mjs';
 import { correctionPart } from '../writer.mjs';
 
 export async function checkDocs(ctx) {
-  const { callModel, cfg, deletes, drafts, heldBack, log, manifestText, models, narrative, packed, staleText, warn, writeDoc } = ctx;
+  const { callModel, cfg, deletes, drafts, guidelines, heldBack, log, manifestText, models, narrative, packed, staleText, warn, writeDoc } = ctx;
   // 5.9 checker in batches, then at most one correction per file; a delete is never corrected
   const toCheck = [...drafts.map((d) => ({ ...d, editDiff: unifiedDiff(d.current ?? '', d.content, d.path) })), ...deletes];
   let verdicts = new Map();
@@ -17,7 +17,7 @@ export async function checkDocs(ctx) {
       check: async (batch, i, n) => {
         const res = await callModel(models.checker, n > 1 ? `checker ${i + 1}/${n}` : 'checker', {
           system: CHECKER_SYSTEM,
-          blocks: [{ text: checkerUser({ narrative, diff: packed.diff, manifest: manifestText, stale: staleText, docs: batch }) }],
+          blocks: [{ text: checkerUser({ guidelines: guidelines?.text, narrative, diff: packed.diff, manifest: manifestText, stale: staleText, docs: batch }) }],
           maxTokens: cfg.response_max_tokens,
         });
         return parseChecker(res.text);
