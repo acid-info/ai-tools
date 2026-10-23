@@ -78,7 +78,8 @@ only touches Markdown, and the tool reports its own checks as a `docs-sync/gates
 If that setting is locked by your org, or the default branch requires a status check on every
 PR, set `DOCS_SYNC_TOKEN` to a fine-grained PAT from a shared bot account with `contents: write`,
 `pull-requests: write` and `statuses: write` on that repo only. The tool then pushes and opens
-the PR as that account, which also triggers CI.
+the PR as that account, which also triggers CI. Requesting a team as reviewer also needs it, with
+the `members: read` organization permission added.
 
 Either way, the rolling commit is created with the workflow's own token and signed by GitHub, so
 it passes "require signed commits" rules.
@@ -119,7 +120,7 @@ guidelines_files:
   - CLAUDE.md
 
 reviewers:
-  - '@acid-info/web'
+  - '@acid-info/web'               # a team: needs DOCS_SYNC_TOKEN, see below
 ```
 
 The file is a YAML subset: `key: value` lines, and lists as `- item` lines or inline `[a, b]`.
@@ -131,9 +132,10 @@ a warning and does nothing.
 A bare `@web` is a user called `web`; write a team as `@org/web`. The leading `@` is optional.
 Entries are checked when the config loads: one that is not a valid login or `org/team`, or a
 team from another org, fails the run. Duplicates are dropped. A failed review request is logged
-as a warning and the run carries on. Requesting a team needs a token that can read the org's
-teams, which the Actions token may not be: if the run warns, set `DOCS_SYNC_TOKEN` with read
-access to the org's members.
+as a warning and the run carries on. The Actions token cannot read org teams, so without
+`DOCS_SYNC_TOKEN` a team request always fails with a 422 ("Could not resolve to a node with the
+global id"). Either set `DOCS_SYNC_TOKEN` with `members: read` on the org, or list the team's
+members by login.
 
 Guideline files such as `AGENTS.md` and `CLAUDE.md` are edited like any other doc when
 `doc_paths` covers them, and any edit or delete of one is bannered at the top of the PR with its
