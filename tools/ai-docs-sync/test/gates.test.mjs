@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { API } from '#core/api.mjs';
 
 import { makeIsEditableDoc } from '../src/allowlist.mjs';
-import { gateAllowlist, gateFlags, gateFormat, gateLinks, gateNonEmpty, gateSize, gateStyle, runGates } from '../src/gates.mjs';
+import { describeDashFixes, gateAllowlist, gateFlags, gateFormat, gateLinks, gateNonEmpty, gateSize, gateStyle, mechanicalIssues, runGates } from '../src/gates.mjs';
 import { cfg, tmpRepo } from './helpers.mjs';
 
 describe('gates', () => {
@@ -94,16 +94,144 @@ describe('gates', () => {
     assert.equal(gateSize({ action: 'create', content: 'x' }, { target: null }).ok, true);
   });
 
-  test('gate 4: dashes fixed on changed lines only, attribution drops the file', () => {
+  // One added line through gate 4, against an empty current doc.
+  const restyle = (line) => gateStyle({ path: 'x', content: `${line}\n` }, { current: '' }).content.replace(/\n$/, '');
+
+  describe('gate 4: the dash replacement table', () => {
+    test('a numeric range gets a hyphen', () => {
+      assert.equal(restyle('Takes 1\u20133 minutes, from 2019 \u2013 2024 and 5 -- 7.'), 'Takes 1-3 minutes, from 2019-2024 and 5-7.');
+    });
+    test('two dashes in one sentence become parentheses', () => {
+      assert.equal(restyle('Three tools \u2014 lint, test, build \u2014 run on every push.'), 'Three tools (lint, test, build) run on every push.');
+      assert.equal(restyle('It runs twice -- once per branch -- and stops.'), 'It runs twice (once per branch) and stops.');
+    });
+    test('a label in a list item, heading or table cell gets a colon', () => {
+      assert.equal(restyle('- `foo` \u2014 does bar'), '- `foo`: does bar');
+      assert.equal(restyle('## Setup \u2014 local'), '## Setup: local');
+      assert.equal(restyle('| `foo` | bar \u2014 baz |'), '| `foo` | bar: baz |');
+    });
+    test('any other single dash gets a colon', () => {
+      assert.equal(restyle('It posts \u2014 nothing else.'), 'It posts: nothing else.');
+      assert.equal(restyle('It posts -- nothing else.'), 'It posts: nothing else.');
+    });
+    test('a single dash in a sentence that already has a colon gets a comma', () => {
+      assert.equal(restyle('Note: it retries \u2014 once.'), 'Note: it retries, once.');
+    });
+    test('a dangling dash at the start or end of a line goes', () => {
+      assert.equal(restyle('\u2014 see below'), 'see below');
+      assert.equal(restyle('as above \u2014'), 'as above');
+    });
+  });
+
+  // Multi-line prose through gate 4 as a create, so every line is eligible.
+  const restyleParagraph = (content) => gateStyle({ path: 'x', content }, { current: '' }).content;
+
+  describe('gate 4: wrapped paragraphs', () => {
+    test('a dash at the end of a wrapped line gets the single dash rule', () => {
+      assert.equal(restyleParagraph('It posts \u2014\nnothing else.\n'), 'It posts:\nnothing else.\n');
+      assert.equal(restyleParagraph('It posts --\nnothing else.\n'), 'It posts:\nnothing else.\n');
+      assert.equal(restyleParagraph('Note: it retries \u2014\nonce.\n'), 'Note: it retries,\nonce.\n');
+    });
+
+    test('a pair split across two lines becomes parentheses', () => {
+      const r = gateStyle({ path: 'x', content: 'It runs twice \u2014\nonce per branch \u2014 and stops.\n' }, { current: '' });
+      assert.equal(r.content, 'It runs twice\n(once per branch) and stops.\n');
+      assert.deepEqual(r.fixes.map((f) => [f.line, f.count]), [[1, 1], [2, 1]]);
+      assert.deepEqual(r.left, []);
+    });
+
+    test('a pair spanning an unchanged line is reported, not replaced', () => {
+      const current = 'It runs twice \u2014\nonce per branch.\n';
+      const content = current.replace('once per branch.', 'once per branch \u2014 and stops.');
+      const r = gateStyle({ path: 'x', content }, { current });
+      assert.equal(r.content, content);
+      assert.deepEqual(r.fixes, []);
+      assert.deepEqual(r.left, [2]);
+      assert.equal(describeDashFixes(r.fixes, r.left), 'dash left on line 2: it pairs with a line this run did not change');
+    });
+
+    test('a dash that opens a line is dangling and goes', () => {
+      assert.equal(restyleParagraph('Line one\n\u2014 see below\n'), 'Line one\nsee below\n');
+    });
+
+    test('a wrapped paragraph keeps its line count and newlines', () => {
+      const content = 'It posts \u2014\nnothing else, and it \u2014\nkeeps going \u2014 here.\n';
+      const out = restyleParagraph(content);
+      assert.deepEqual(out.split('\n'), ['It posts', '(nothing else, and it)', 'keeps going: here.', '']);
+      assert.equal(out.match(/\n/g).length, content.match(/\n/g).length);
+    });
+
+    test('a paragraph ends at a heading, a list item, a table row or a hidden-only line', () => {
+      assert.equal(restyleParagraph('Prose \u2014\n## Heading\nafter.\n'), 'Prose\n## Heading\nafter.\n');
+      assert.equal(restyleParagraph('Prose \u2014\n- item\nafter.\n'), 'Prose\n- item\nafter.\n');
+      assert.equal(restyleParagraph('Prose \u2014\n<!-- note -->\nafter.\n'), 'Prose\n<!-- note -->\nafter.\n');
+      assert.equal(restyleParagraph('Prose \u2014\n`code`\nafter.\n'), 'Prose\n`code`\nafter.\n');
+    });
+  });
+
+  test('gate 4: code, comments, link targets, URLs, front matter and dash-only cells keep their dashes', () => {
+    const content = [
+      '---',
+      'title: A \u2014 B',
+      '---',
+      'Run `a \u2014 b` and see [x](./a\u2014b.md) or https://example.com/a\u2014b <!-- c \u2014 d -->.',
+      '<!-- open \u2014',
+      'still \u2014 a comment -->',
+      '| flag | default |',
+      '| --- | --- |',
+      '| `--greeting` | \u2014 |',
+      '```',
+      'echo "a \u2014 b"',
+      '```',
+      '',
+    ].join('\n');
+    const r = gateStyle({ path: 'x', content }, { current: '' });
+    assert.equal(r.content, content);
+    assert.deepEqual(r.fixes, []);
+    assert.deepEqual(mechanicalIssues({ action: 'create', content, current: '' }), []);
+  });
+
+  test('gate 4: only lines this run changed are fixed, with their line numbers', () => {
     const changed = OLD.replace('validates hCaptcha -- then posts.', 'posts \u2014 nothing else.');
     const r = gateStyle({ path: 'docs/api/architecture.md', content: changed }, { current: OLD });
     assert.equal(r.ok, true);
-    assert.equal(r.fixed, 1);
-    assert.ok(r.content.includes('posts -- nothing else.'));
+    assert.deepEqual(r.fixes, [{ line: 3, before: 'The handler posts \u2014 nothing else.', after: 'The handler posts: nothing else.', count: 1 }]);
     assert.ok(r.content.includes('Keep \u2014 this dash.'), 'untouched paragraph left alone');
+    assert.equal(describeDashFixes(r.fixes), '1 dash replaced mechanically on line 3; check it reads well');
+    assert.equal(describeDashFixes([{ line: 14, count: 2 }, { line: 37, count: 1 }]), '3 dashes replaced mechanically on lines 14, 37; check they read well');
+  });
+
+  test('gate 4: an unspaced double hyphen and a spaced hyphen are left for the reviewer', () => {
+    const line = 'Pass --greeting to it, or compute a - b.';
+    assert.equal(restyle(line), line);
+    const flag = gateFlags({ path: 'x', content: `${line}\n` }, { current: '', isGuideline: false }).flags.find((f) => f.kind === 'style');
+    assert.deepEqual(flag.detail, ['double hyphen outside code on line 1', 'spaced hyphen used as a dash on line 1']);
+  });
+
+  test('gate 4: attribution on a changed line still drops the file', () => {
     const attributed = OLD + '\nGenerated with an assistant.\n';
     assert.match(gateStyle({ path: 'x', content: attributed }, { current: OLD }).reason, /attribution string on line \d+/);
     assert.equal(gateStyle({ path: 'x', content: OLD + '\nCo-Authored-By: someone\n' }, { current: OLD }).ok, false);
+  });
+
+  test('mechanicalIssues: dashes and attribution on added lines are "must" style issues', () => {
+    const current = '# t\n\nOld \u2014 line.\n';
+    const content = current + 'New \u2014 line with `a -- b`.\nRanges 1\u20132, x -- y, --flag, a - b.\nGenerated with care.\n';
+    const issues = mechanicalIssues({ action: 'update', content, current });
+    assert.ok(issues.every((i) => i.severity === 'must' && i.source === 'style'));
+    assert.deepEqual(
+      issues.map((i) => i.note),
+      [
+        'line 4: em dash in prose; use a comma, a colon or parentheses',
+        'line 5: en dash in prose; use a hyphen in a number range, else a comma, a colon or parentheses',
+        'line 5: double hyphen used as a dash; use a comma, a colon or parentheses',
+        'line 5: double hyphen outside code; put a command-line flag in backticks, else use a comma, a colon or parentheses',
+        'line 5: spaced hyphen used as a dash; use a comma, a colon or parentheses',
+        'line 6: attribution string; remove it',
+      ]
+    );
+    assert.deepEqual(mechanicalIssues({ action: 'update', content: current, current }), [], 'unchanged lines are not reported');
+    assert.deepEqual(mechanicalIssues({ action: 'delete', path: 'x', reason: 'gone', current }), []);
   });
 
   test('gate 5: new URLs and raw HTML are flagged, comments and anchors are not; guideline edits carry a banner diff', () => {
@@ -118,6 +246,14 @@ describe('gates', () => {
     assert.match(g.flags.find((f) => f.kind === 'guideline_edit').detail, /\+new rule/);
     const v = gateFlags({ path: 'x', content: 'Reviewed by Anthropic models.\n' }, { current: '', isGuideline: false });
     assert.deepEqual(v.flags.find((f) => f.kind === 'vendor_names').detail, ['Anthropic']);
+  });
+
+  test('gate 5: the style flag lists bold-label bullets on added lines only', () => {
+    const current = '# t\n\n- **Old:** kept as it was\n';
+    const content = current + '- **Fast:** new\n1. __Pick one.__ Then go.\n- `**not bold**` in code\n- plain **bold** later\n\n```\n- **in a fence**\n```\n';
+    const r = gateFlags({ path: 'x', content }, { current, isGuideline: false });
+    assert.deepEqual(r.flags.find((f) => f.kind === 'style').detail, ['bullet starting with a bold label on lines 4, 5']);
+    assert.equal(gateFlags({ path: 'x', content: current + 'Plain line.\n' }, { current, isGuideline: false }).flags.length, 0);
   });
 
   test('gate 5: tags inside code spans and fences are text, not HTML; URLs there are still flagged', () => {
@@ -148,8 +284,8 @@ describe('gates', () => {
         ctx(root)
       );
       assert.deepEqual(kept.map((k) => k.path), ['docs/api/architecture.md', 'AGENTS.md']);
-      assert.ok(kept[0].content.includes('posts -- only.'));
-      assert.equal(kept[0].dashesFixed, 1);
+      assert.ok(kept[0].content.includes('The handler posts: only.'));
+      assert.deepEqual(kept[0].dashFixes.map((f) => f.line), [3]);
       assert.ok(kept[1].flags.some((f) => f.kind === 'guideline_edit'));
       assert.deepEqual(dropped.map((d) => [d.path, d.gate]), [['content/x.md', 0], ['docs/civi-crm/architecture.md', 2], ['README.md', 4]]);
     } finally {

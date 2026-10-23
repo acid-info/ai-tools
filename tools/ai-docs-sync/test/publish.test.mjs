@@ -84,14 +84,18 @@ describe('PR body', () => {
         reason: 'Endpoint moved; thanks @alice, fixes #12 <!--',
         check: { action: 'correct', issues: [{ severity: 'must', note: 'Claims hCaptcha <b>still</b> runs' }] },
         corrected: true,
-        dashesFixed: 2,
-        flags: [{ kind: 'new_urls', detail: ['https://evil.example/@x'] }],
+        dashFixes: [{ line: 4, before: 'a \u2014 b', after: 'a: b', count: 1 }, { line: 9, before: 'c \u2014 d', after: 'c: d', count: 1 }],
+        flags: [
+          { kind: 'new_urls', detail: ['https://evil.example/@x'] },
+          { kind: 'style', detail: ['bullet starting with a bold label on line 7'] },
+        ],
       },
       {
         path: 'AGENTS.md',
         action: 'update',
         reason: 'Commands changed',
         check: { action: 'proceed', unchecked: true, issues: [] },
+        dashesLeft: [5],
         flags: [{ kind: 'guideline_edit', detail: '--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1 +1 @@\n-old\n+new ``` closes #3\n' }],
       },
     ],
@@ -131,7 +135,7 @@ describe('PR body', () => {
     assert.ok(body.startsWith('> [!WARNING]\n> **Guideline file deleted: `apps/crm/CLAUDE.md`.**'), 'delete banner at the very top');
     assert.match(body, /> \*\*Guideline file edited: `AGENTS\.md`\.\*\*/);
     assert.match(body, /````diff\n[\s\S]*\+new ``` closes #​3\n````/, 'fence outlasts the backticks in the diff, keyword defused');
-    const headings = ['Deleted this run', 'Edited this run', 'Carried forward', 'Earlier changes discarded because `develop` changed the file', 'Held back', 'New links, raw HTML and vendor names to check', 'Suggested deletions (not acted on)', 'Diff not shown', 'Commits and PRs in this range', 'API usage'];
+    const headings = ['Deleted this run', 'Edited this run', 'Carried forward', 'Earlier changes discarded because `develop` changed the file', 'Held back', 'New links, raw HTML and vendor names to check', 'Style to check (not blocking)', 'Suggested deletions (not acted on)', 'Diff not shown', 'Commits and PRs in this range', 'API usage'];
     for (const h of headings) assert.ok(body.includes(`\n#### ${h}`), h);
     const at = headings.map((h) => body.indexOf(`\n#### ${h}`));
     assert.deepEqual([...at].sort((x, y) => x - y), at, 'sections in order: deletes before edits');
@@ -140,7 +144,9 @@ describe('PR body', () => {
     assert.match(body, /thanks @​alice, fixes #​12 &lt;!--/);
     assert.match(body, /addressed in the correction pass:\n    - \[must\] Claims hCaptcha &lt;b&gt;still&lt;\/b&gt; runs/);
     assert.match(body, /Checker: \*\*unchecked\*\*/);
-    assert.match(body, /2 line\(s\) had en\/em dashes replaced/);
+    assert.match(body, /\n  - 2 dashes replaced mechanically on lines 4, 9; check they read well\n/);
+    assert.match(body, /\n  - dash left on line 5: it pairs with a line this run did not change\n/);
+    assert.match(body, /#### Style to check \(not blocking\)\n- `docs\/api\.md`: bullet starting with a bold label on line 7\n/);
     assert.match(body, /- `docs\/crm \(old\)\.md` -- CRM app removed\n  - Checker: ok\n  - Still linked from, not fixed here: `docs\/specs\/x\.md`\n  - To restore it: \[bbbbbbb copy\]\(https:\/\/github\.com\/o\/r\/blob\/b{40}\/docs\/crm%20%28old%29\.md\)/);
     assert.match(body, /`README\.md` \(from `1111111\.\.2222222`\)/);
     assert.match(body, /- `docs\/was\.md` \(deleted\)/);
@@ -155,6 +161,21 @@ describe('PR body', () => {
     assert.ok(!/<!--(?! ai-docs-sync )/.test(body), 'the only HTML comment is the marker');
     assert.equal(body.match(/-->/g).length, 1);
     assert.deepEqual(parseMarker(body), base().runs);
+  });
+
+  test('issues from the dash and attribution check are listed apart from the checker', () => {
+    const style = { severity: 'must', note: 'line 3: em dash in prose; use a comma, a colon or parentheses', source: 'style' };
+    const model = { severity: 'must', note: 'Claims a retry that the diff removed' };
+    const doc = (check, corrected) => ({ path: 'docs/a.md', action: 'update', reason: 'r', check, corrected, flags: [] });
+    const both = renderPrBody({ ...base(), kept: [doc({ action: 'correct', issues: [model, style] }, true)] });
+    assert.match(
+      both,
+      /  - Checker requested changes, addressed in the correction pass:\n    - \[must\] Claims a retry that the diff removed\n  - Dash and attribution check asked for changes, addressed in the correction pass:\n    - \[must\] line 3: em dash/
+    );
+    const styleOnly = renderPrBody({ ...base(), kept: [doc({ action: 'correct', issues: [style] }, false)] });
+    assert.match(styleOnly, /  - Checker: ok\n  - Dash and attribution check asked for changes; the correction pass failed, first draft kept:\n    - \[must\] line 3/);
+    const unchecked = renderPrBody({ ...base(), kept: [doc({ action: 'correct', unchecked: true, issues: [style] }, true)] });
+    assert.match(unchecked, /  - Checker: \*\*unchecked\*\* \(no verdict for this file\)\n  - Dash and attribution check asked for changes, addressed/);
   });
 
   test('restore links escape characters that would end a Markdown link', () => {
@@ -189,7 +210,7 @@ describe('PR body', () => {
       action: 'update',
       reason: long,
       check: { action: 'proceed', issues },
-      dashesFixed: 1,
+      dashFixes: [{ line: 1, before: 'a', after: 'b', count: 1 }],
       flags: [{ kind: 'new_urls', detail: [`https://example.com/${i}/${'x'.repeat(80)}`] }],
     }));
     const deleted = Array.from({ length: 50 }, (_, i) => ({
