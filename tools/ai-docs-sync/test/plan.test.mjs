@@ -255,11 +255,11 @@ describe('creating docs', () => {
     });
     const at = ['Deleted this run', 'New docs', 'Edited this run', 'Held back'].map((h) => body.indexOf(`\n#### ${h}\n`));
     assert.ok(at.every((i) => i > 0) && [...at].sort((x, y) => x - y).join() === at.join(), body);
-    assert.match(body, /#### New docs\n- `docs\/commands\/new\.md` -- Documents docs\/commands\/new\.md\n  - Checker: ok\n  - Linked from `docs\/index\.md`\n/);
-    assert.match(body, /- `packages\/c\/README\.md` -- Documents packages\/c\/README\.md\n  - Checker: ok\n  - \*\*Not linked from any doc\*\* \(no doc found to link it from\)\n/);
+    assert.match(body, /#### New docs\n- `docs\/commands\/new\.md`: Documents docs\/commands\/new\.md\n  - Checker: ok\n  - Linked from `docs\/index\.md`\n/);
+    assert.match(body, /- `packages\/c\/README\.md`: Documents packages\/c\/README\.md\n  - Checker: ok\n  - \*\*Not linked from any doc\*\* \(no doc found to link it from\)\n/);
     const edited = body.slice(at[2], at[3]);
     assert.ok(edited.includes('`docs/index.md` (update)') && !edited.includes('(create)'), 'creates are not listed as edits');
-    assert.match(body, /- `misc\/notes\.md` -- placement: no docs live near misc\//);
+    assert.match(body, /- `misc\/notes\.md`: placement: no docs live near misc\//);
     assert.match(body, /- `docs\/commands\/older\.md` \(new\)\n- `docs\/cli\.md`\n/, 'a create carried from an earlier run stays marked as new');
   });
 });
