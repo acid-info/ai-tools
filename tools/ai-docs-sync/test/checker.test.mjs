@@ -29,6 +29,22 @@ describe('checker parser and the single-correction rule', () => {
     assert.equal(decideAfterCheck({ verdict: 'revise', issues: [{ severity: 'must', note: 'x' }] }).action, 'correct');
     assert.equal(decideAfterCheck({ verdict: 'drop', issues: [] }).action, 'drop');
   });
+  test('decideAfterCheck: a style "must" from the code pre-check sends the file to correction', () => {
+    const style = { severity: 'must', note: 'line 3: em dash in prose', source: 'style' };
+    const ok = decideAfterCheck({ verdict: 'ok', issues: [style] });
+    assert.deepEqual(ok, { action: 'correct', issues: [style] });
+    const noVerdict = decideAfterCheck({ issues: [style] });
+    assert.equal(noVerdict.action, 'correct');
+    assert.equal(noVerdict.unchecked, true, 'a failed checker still shows as unchecked');
+    assert.equal(decideAfterCheck({ verdict: 'drop', issues: [style] }).action, 'drop', 'a drop still wins');
+    assert.equal(decideAfterCheck({ verdict: 'revise', issues: [style] }).action, 'correct');
+    assert.equal(decideAfterCheck({ verdict: 'ok', issues: [{ severity: 'must', note: 'x' }] }).action, 'proceed', 'a model must under ok stays ignored');
+  });
+  test('decideAfterCheck: "should" style issues alone never cost a correction', () => {
+    const should = { severity: 'should', note: 'line 4: hype word "seamless"' };
+    assert.equal(decideAfterCheck({ verdict: 'ok', issues: [should] }).action, 'proceed');
+    assert.equal(decideAfterCheck({ verdict: 'revise', issues: [should, { ...should, source: 'style' }] }).action, 'proceed');
+  });
   test('decideAfterCheck for a delete: drop or proceed, never correct', () => {
     const must = { verdict: 'revise', issues: [{ severity: 'must', note: 'subject still exists' }] };
     assert.equal(decideAfterCheck(must, 'delete').action, 'drop');

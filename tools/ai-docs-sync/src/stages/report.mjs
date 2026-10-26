@@ -1,9 +1,12 @@
 import { costLine } from '#core/usage.mjs';
 
 import { describeDecision } from '../carry.mjs';
+import { describeDashFixes } from '../gates.mjs';
 import { isGuidelineFile } from '../guidelines.mjs';
 import { unifiedDiff } from '../linediff.mjs';
 import { regenerateFrom } from '../publish.mjs';
+
+const issueText = (i) => `[${i.severity}${i.source === 'style' ? ', dash check' : ''}] ${i.note}`;
 
 export async function report(ctx) {
   const { TARGET_BRANCH, carried, carryBase, cfg, decisions, delPlan, discardedReviewer, dropped, finalInbound, from, guidelineFiles, head, heldBack, kept, keptDeletes, keptEdits, linkPlan, log, moveCursor, mustRefresh, obsolete, packed, prevRuns, readCheckout, revertedFixups, reviewerRemoved, staleCarried, tombstones, usage } = ctx;
@@ -12,9 +15,9 @@ export async function report(ctx) {
   for (const k of kept) {
     const notes = [];
     if (k.check?.unchecked) notes.push('unchecked');
-    else if (k.corrected) notes.push(`corrected after: ${k.check.issues.map((i) => `[${i.severity}] ${i.note}`).join('; ')}`);
-    else if (k.check?.issues?.length) notes.push(`checker notes: ${k.check.issues.map((i) => `[${i.severity}] ${i.note}`).join('; ')}`);
-    if (k.dashesFixed) notes.push(`${k.dashesFixed} dash line(s) fixed`);
+    else if (k.corrected) notes.push(`corrected after: ${k.check.issues.map(issueText).join('; ')}`);
+    else if (k.check?.issues?.length) notes.push(`checker notes: ${k.check.issues.map(issueText).join('; ')}`);
+    if (k.dashFixes?.length || k.dashesLeft?.length) notes.push(describeDashFixes(k.dashFixes, k.dashesLeft));
     if (k.action === 'create') notes.push(k.linkedFrom.length ? `linked from ${k.linkedFrom.join(', ')}` : 'not linked from any doc');
     log(`KEEP ${k.action} ${k.path} -- ${k.reason}` + (notes.length ? `\n     ${notes.join('\n     ')}` : ''));
     for (const f of k.flags) {

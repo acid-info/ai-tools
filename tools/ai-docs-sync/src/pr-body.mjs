@@ -3,18 +3,35 @@ import { codeBlock, defuse, inlineCode } from '#core/markdown.mjs';
 import { usageTable } from '#core/usage.mjs';
 
 import { BANNER_DIFF_MAX, PR_BODY_MAX } from './config.mjs';
+import { describeDashFixes } from './gates.mjs';
 import { renderMarker, short7 } from './publish.mjs';
 
+// Issues from the code pre-check (`source: 'style'`) are listed apart from the model's, so a
+// reviewer can tell a regex finding from a model's judgement.
 function checkerLines(k, notes = true) {
-  const issues = notes ? (k.check?.issues ?? []).map((i) => `    - [${i.severity}] ${defuse(i.note)}`) : [];
-  if (k.check?.unchecked) return ['  - Checker: **unchecked** (no verdict for this file)'];
-  if (k.check?.action === 'correct')
-    return [
-      k.corrected ? '  - Checker requested changes, addressed in the correction pass' + (notes ? ':' : '') : '  - Checker requested changes; the correction pass failed, first draft kept' + (notes ? ':' : ''),
-      ...issues,
-    ];
-  if (issues.length) return ['  - Checker: ok, with notes (not blocking):', ...issues];
-  return ['  - Checker: ok'];
+  const all = k.check?.issues ?? [];
+  const render = (list) => (notes ? list.map((i) => `    - [${i.severity}] ${defuse(i.note)}`) : []);
+  const model = all.filter((i) => i.source !== 'style');
+  const mechanical = all.filter((i) => i.source === 'style');
+  const correct = k.check?.action === 'correct';
+  const colon = notes ? ':' : '';
+  const out = [];
+  if (k.check?.unchecked) out.push('  - Checker: **unchecked** (no verdict for this file)');
+  else if (correct && model.some((i) => i.severity === 'must'))
+    out.push(
+      k.corrected ? '  - Checker requested changes, addressed in the correction pass' + colon : '  - Checker requested changes; the correction pass failed, first draft kept' + colon,
+      ...render(model)
+    );
+  else if (model.length && notes) out.push('  - Checker: ok, with notes (not blocking):', ...render(model));
+  else out.push('  - Checker: ok');
+  if (mechanical.length)
+    out.push(
+      correct && k.corrected
+        ? '  - Dash and attribution check asked for changes, addressed in the correction pass' + colon
+        : '  - Dash and attribution check asked for changes; the correction pass failed, first draft kept' + colon,
+      ...render(mechanical)
+    );
+  return out;
 }
 
 const FLAG_NAMES = { new_urls: 'new URLs', raw_html: 'raw HTML', vendor_names: 'vendor names' };
@@ -128,6 +145,7 @@ export function renderPrBody({
           return [
             `- ${inlineCode(k.path)} -- ${defuse(k.reason)}`,
             ...checkerLines(k, notes),
+            ...(flags && (k.dashFixes?.length || k.dashesLeft?.length) ? [`  - ${describeDashFixes(k.dashFixes, k.dashesLeft)}`] : []),
             linkers.length
               ? `  - Linked from ${linkers.slice(0, 5).map((l) => inlineCode(l)).join(', ')}${linkers.length > 5 ? `, and ${linkers.length - 5} more` : ''}`
               : `  - **Not linked from any doc**${unlinked ? ` (${defuse(unlinked.detail[0])})` : ''}`,
@@ -141,7 +159,7 @@ export function renderPrBody({
             ? [
                 `- ${inlineCode(k.path)} (${k.action}) -- ${defuse(k.reason)}`,
                 ...checkerLines(k, notes),
-                ...(flags && k.dashesFixed ? [`  - ${k.dashesFixed} line(s) had en/em dashes replaced with \`--\``] : []),
+                ...(flags && (k.dashFixes?.length || k.dashesLeft?.length) ? [`  - ${describeDashFixes(k.dashFixes, k.dashesLeft)}`] : []),
               ]
             : [`- ${inlineCode(k.path)} (${k.action})`]
         )
@@ -168,6 +186,12 @@ export function renderPrBody({
         ? sec(
             'New links, raw HTML and vendor names to check',
             kept.flatMap((k) => (k.flags ?? []).filter((f) => FLAG_NAMES[f.kind]).map((f) => `- ${inlineCode(k.path)}: ${flagText(f)}`))
+          )
+        : []),
+      ...(flags
+        ? sec(
+            'Style to check (not blocking)',
+            kept.flatMap((k) => (k.flags ?? []).filter((f) => f.kind === 'style').map((f) => `- ${inlineCode(k.path)}: ${f.detail.join('; ')}`))
           )
         : []),
       ...sec(

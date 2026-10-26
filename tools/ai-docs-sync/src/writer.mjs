@@ -1,35 +1,54 @@
 import { approxTokens } from '#core/text.mjs';
 
 import { DEFAULTS } from './config.mjs';
-import { HOUSE_STYLE, UNTRUSTED } from './prompting.mjs';
+import { DOC_STYLE, UNTRUSTED } from './prompting.mjs';
 import { triageUser } from './triage.mjs';
 
 export const WRITER_SYSTEM = `You keep documentation in step with code. You are given the repository guidelines, the change
 narrative (why the code changed), the code diff (what changed), the manifest of editable docs,
-and then one doc to bring up to date with the reason it was selected.
+and then one doc to bring up to date with the reason it was selected. Nobody is there to answer
+questions, so work only from what you are given.
 
-Rules:
-- Change only what the diff invalidates. Do not restyle, reorder or "improve" untouched sections.
+Rules for every doc:
 - When the narrative and the diff disagree, the diff wins. Mention the disagreement in the doc
   only if it describes current behaviour.
 - When the diff makes a statement unknowable (a value now comes from the environment, say), say
-  so rather than guessing.
+  so instead of guessing.
 - Keep every relative link that still resolves. Use the manifest for cross-references.
-- For a new file, follow the structure, heading depth and tone of the doc in <exemplar> when one
-  is given, else of comparable docs in the manifest. Do not copy the exemplar's content. Document
-  only what the diff and the narrative support.
 - <earlier_diff>, when present, is code already on the target branch that a discarded edit of
   this doc documented. It is as much ground truth as the diff.
 - Never link to a doc listed in <deleted_this_run>. When the task says to remove a link to one,
-  remove the link or retarget it to a surviving doc from the manifest, and adjust the sentence
-  around it so it still reads.
+  remove the link or retarget it to a surviving doc from the manifest.
 - <reviewer_decisions>, when present, are a human reviewer's calls on this pull request. Never
   link to a doc a reviewer declined, and keep every existing link to a doc whose delete a
   reviewer reverted: the reviewer wants that doc kept and reachable.
-${HOUSE_STYLE}
+
+Updating a doc (Action: update):
+- Change only what the diff invalidates. Do not restyle, reorder or "improve" untouched sections.
+- Text you add or change follows the writing style below.
+- When you have to edit a paragraph, rewrite it around its main point instead of patching words
+  one at a time.
+- Keep every true fact, command, path and link target.
+- Leave passages that already read well alone.
+
+Creating a doc (Action: create):
+- Give the page one job: a how-to, a reference or an explanation.
+- A README answers these questions in this order, and skips any with nothing specific to say:
+  what this is and who it is for; how to run it, with exact commands; where things are, if the
+  layout is not obvious; what usually trips people up; where to go next.
+- Take the structure and heading depth from the doc in <exemplar> when one is given, else from
+  comparable docs in the manifest. Do not copy the exemplar's content, nor its habits: if it uses
+  bold-label bullets or hype words, write without them.
+- Document only what the diff and the narrative support.
+
+Link fix-ups and index updates (the reason only asks you to add, remove or retarget a link):
+- Change only the sentence that holds the link, and keep it reading as a sentence.
+
+${DOC_STYLE}
+
 ${UNTRUSTED}
 
-Output the COMPLETE new file content, nothing else, inside one fenced block that opens with four
+Output the complete new file content, nothing else, inside one fenced block that opens with four
 backticks on its own line (\`\`\`\`markdown) and closes with four backticks on its own line. No
 explanation before or after the fence. Not a patch.`;
 
@@ -60,7 +79,7 @@ export function writerDocPart({ path: p, action, reason, sourcePatches, current,
 
 export function correctionPart({ draft, issues }) {
   const list = issues.map((i) => `- [${i.severity}] ${i.note}`).join('\n');
-  return `<draft>\n${draft}\n</draft>\n\n<checker_issues>\n${list}\n</checker_issues>\n\nRevise your draft to address every "must" issue and any "should" issue you agree with. Output the complete corrected file as before.`;
+  return `<draft>\n${draft}\n</draft>\n\n<checker_issues>\n${list}\n</checker_issues>\n\nRevise your draft to address every "must" issue and any "should" issue you agree with. Apply "should" style notes only to lines you already changed. Output the complete corrected file as before.`;
 }
 
 // Takes the first opening fence and the last closing fence of the same kind and at least the
