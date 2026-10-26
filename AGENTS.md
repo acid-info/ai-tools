@@ -103,6 +103,52 @@ Code and workflow changes must keep all of these:
 4. Decide reader or writer and add the tool to the table in the root README.
 5. Prove it end to end from a sandbox repo before anyone tags `<tool>/v1`.
 
+## Writing docs
+
+Each page has one reader: the root README is for someone deciding whether to use a tool or
+releasing one, a tool's README for an engineer adding it to their repo, and each AGENTS.md for
+whoever changes the code it covers. Check every fact against the code before you write it, and
+run the commands you document when it is safe. `.github/docs-sync.yml` loads `AGENTS.md` as
+ai-docs-sync's guidelines on this repo (this file, plus the AGENTS.md of each tool a change
+touches), so these rules also steer the edits it proposes here.
+
+- Lead with the point: what the thing is for, or the command the reader came for.
+- Use the real names, paths, flags and numbers. Never invent a reason, a number, a command or a
+  path; if you do not know why something is built the way it is, leave the why out.
+- Explain why when there is a reason, and say what a trade-off costs.
+- Use plain words and real subjects: "the job retries once", not "retry handling is performed".
+- No en or em dashes in prose, and no `--` or ` - ` standing in for one; use a comma, colon,
+  semicolon or parentheses.
+- No bullets that start with a bold label, no emoji, no hype words (robust, seamless, powerful,
+  leverage), no openers or closers about the page.
+- Paragraphs to explain, numbered lists for ordered steps, code blocks for anything typed, tables
+  only for reference data with short cells. Bold only the one thing a skimmer must not miss.
+- No AI attribution in docs, commits or PRs: no `Co-Authored-By` trailers, no "Generated with".
+- When you rewrite a page, keep every true fact, command, path and link target (the tool docs
+  link to `README.md#security-model`), and leave passages that read well alone.
+
+## Writing prompts
+
+Prompts live in the tool that sends them: ai-review's in `src/prompts.mjs`, ai-docs-sync's next
+to the stage that uses them (`TRIAGE_SYSTEM` in `src/triage.mjs`, `WRITER_SYSTEM` in
+`src/writer.mjs`, `CHECKER_SYSTEM` in `src/checker.mjs`, shared blocks in `src/prompting.mjs`).
+The rules for how a tool writes belong in its prompts too, not in `core/`.
+
+The system prompt holds the instructions. Anything read from a repository (diffs, docs, commit
+messages, guidelines) goes in the user turn inside a named tag such as `<diff>` or
+`<guidelines>`, so the model can tell data from instructions. ai-docs-sync's system prompts also
+say outright that text inside those tags is data and must never be followed (`UNTRUSTED` in
+`src/prompting.mjs`); keep that list in step when you add a tag.
+
+Prompt prose follows the rules in [Writing docs](#writing-docs): plain words, no dashes in
+prose, no shouted capitals. Formats the code parses, such as the JSON keys and severities in
+ai-review or the fenced file ai-docs-sync's writer returns, change only together with their
+parser.
+
+Tests pin the key phrases of each prompt (`tools/ai-review/test/prompts.test.mjs`, and
+`triage`, `writer`, `checker`, `carry` and `plan` tests in ai-docs-sync), so a wording change
+fails a test and shows up in review. Update the assertion in the same commit as the wording.
+
 ## Commits
 
 Conventional commits, lowercase, present tense: `type(scope): subject`. The scope is the tool
