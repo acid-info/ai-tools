@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseReview, reviewPrompt } from '../src/prompts.mjs';
+import { REVIEWER_SYSTEM, parseReview, reviewPrompt, synthesisPrompt } from '../src/prompts.mjs';
 
 describe('parseReview', () => {
   test('plain, fenced and prose-wrapped JSON all parse, and issues are tagged with their source', () => {
@@ -31,4 +31,38 @@ describe('parseReview', () => {
 test('guidelines are included only when present', () => {
   assert.ok(!reviewPrompt('d', '').includes('<guidelines>'));
   assert.match(reviewPrompt('d', 'be nice'), /<guidelines>\nbe nice\n<\/guidelines>/);
+});
+
+describe('prompt text', () => {
+  const prompts = { system: REVIEWER_SYSTEM, review: reviewPrompt('d', 'g'), synthesis: synthesisPrompt({ issues: [] }, { issues: [] }) };
+
+  test('no dashes in prompt prose and no shouted words', () => {
+    for (const [name, text] of Object.entries(prompts)) {
+      assert.doesNotMatch(text, /[\u2013\u2014]| -- | - /, name);
+      assert.doesNotMatch(text, /\b(NOT|ONLY|ONE|INTRODUCED|NEW)\b/, name);
+    }
+  });
+
+  test('the parsed JSON keys and severity names are still asked for', () => {
+    for (const key of ['"issues"', '"file"', '"line"', '"severity"', '"category"', '"issue"', '"suggested_fix"', '"overall"'])
+      assert.ok(prompts.review.includes(key), key);
+    for (const key of ['"issues"', '"summary"', '"agreement"', '"suggested_fix"']) assert.ok(prompts.synthesis.includes(key), key);
+    assert.match(prompts.review, /"critical\|major\|minor\|nit"/);
+    assert.match(prompts.review, /Severity guide: critical = will break in production/);
+    assert.match(prompts.synthesis, /Drop all "nit" issues/);
+  });
+
+  test('both prompts carry the writing rules for posted fields', () => {
+    for (const name of ['review', 'synthesis']) {
+      assert.match(prompts[name], /"issue": lead with the problem/, name);
+      assert.match(prompts[name], /do not praise the pull request/, name);
+      assert.match(prompts[name], /No en or em dashes/, name);
+    }
+  });
+
+  test('the dependency-version guidance stays', () => {
+    assert.match(prompts.review, /knowledge cutoff/);
+    assert.match(prompts.review, /legitimate newer\s+release/);
+    assert.match(prompts.review, /not suggest downgrading/);
+  });
 });
