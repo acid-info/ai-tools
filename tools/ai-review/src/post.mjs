@@ -16,39 +16,46 @@ export function issueLine(i) {
 // A zero-width space after "@" keeps the text readable but kills the mention.
 export const deMention = (s) => String(s ?? '').replace(/@(?=[A-Za-z\d_/-])/g, '@​');
 
+// `🟠 Major (bug)`: icon, sentence-case severity, category.
+function severityLabel(i) {
+  const sev = String(i.severity ?? '');
+  const category = i.category ? ` (${deMention(i.category)})` : '';
+  return `${ICON[i.severity] ?? '•'} ${sev.charAt(0).toUpperCase()}${sev.slice(1)}${category}`;
+}
+
 const list = (paths) => `${paths.slice(0, 10).join(', ')}${paths.length > 10 ? ', …' : ''}`;
 
 function warningsFor(meta, cfg) {
   const warnings = [];
   if (meta.unlisted)
-    warnings.push(`⚠️ GitHub's file listing is capped and left ${meta.unlisted} changed file(s) unlisted -- review is partial.`);
-  if (meta.omitted) warnings.push(`⚠️ ${meta.omitted} file(s) exceeded the diff token budget and were NOT reviewed -- review is partial.`);
+    warnings.push(`Partial review: GitHub's file listing is capped and left ${meta.unlisted} changed file(s) unlisted.`);
+  if (meta.omitted) warnings.push(`Partial review: ${meta.omitted} file(s) exceeded the diff token budget and were not reviewed.`);
   if (meta.noPatch.length)
     warnings.push(
-      `⚠️ ${meta.noPatch.length} file(s) had no reviewable diff from GitHub (too large) and were NOT reviewed -- ` +
-        `review is partial: ${list(meta.noPatch)}`
+      `Partial review: ${meta.noPatch.length} file(s) had no reviewable diff from GitHub (too large) ` +
+        `and were not reviewed (${list(meta.noPatch)}).`
     );
   if (meta.claudeFailed)
     warnings.push(
-      `⚠️ The ${cfg.anthropic_model} reviewer failed -- this is a single-model review ` +
+      `Single-model review: the ${cfg.anthropic_model} reviewer failed ` +
         `(${cfg.openai_model} only, synthesized by ${meta.synthModel}).`
     );
   if (meta.codexFailed)
     warnings.push(
-      `⚠️ The ${cfg.openai_model} reviewer failed -- this is a single-model review ` +
+      `Single-model review: the ${cfg.openai_model} reviewer failed ` +
         `(${cfg.anthropic_model} only, synthesized by ${meta.synthModel}).`
     );
   if (meta.claudeUnparsed)
     warnings.push(
-      `⚠️ The ${cfg.anthropic_model} reviewer returned output that could not be parsed -- ` +
-        `its findings are missing. See the Actions log for the raw response.`
+      `The ${cfg.anthropic_model} reviewer returned output that could not be parsed, ` +
+        `so its findings are missing. See the Actions log for the raw response.`
     );
   if (meta.codexUnparsed)
     warnings.push(
-      `⚠️ The ${cfg.openai_model} reviewer returned output that could not be parsed -- ` +
-        `its findings are missing. See the Actions log for the raw response.`
+      `The ${cfg.openai_model} reviewer returned output that could not be parsed, ` +
+        `so its findings are missing. See the Actions log for the raw response.`
     );
-  if (meta.synthFailed) warnings.push('⚠️ The synthesis step failed -- showing unmerged reviewer output (may contain duplicates).');
+  if (meta.synthFailed) warnings.push('The synthesis step failed. This shows the unmerged reviewer output, which may contain duplicates.');
   return warnings;
 }
 
@@ -71,12 +78,12 @@ export function renderReview(merged, meta, { cfg, prNumber, usage = [], warn = c
   const unanchored = toPost.filter((i) => !anchorable(i));
 
   const flatItem = (i) =>
-    `- ${ICON[i.severity] ?? '•'} **${i.severity}** ` +
-    `\`${i.file}${issueLine(i) ? `:${issueLine(i)}` : ''}\` -- ${deMention(i.issue)}` +
+    `- ${severityLabel(i)} ` +
+    `\`${i.file}${issueLine(i) ? `:${issueLine(i)}` : ''}\`: ${deMention(i.issue)}` +
     (i.suggested_fix ? ` **Suggested fix:** ${deMention(i.suggested_fix)}` : '');
 
   const bodyLines = [
-    `## 🤖 AI Review (${cfg.anthropic_model} + ${cfg.openai_model})`,
+    `## AI review (${cfg.anthropic_model} + ${cfg.openai_model})`,
     '',
     deMention(merged.summary ?? ''),
     '',
@@ -111,8 +118,8 @@ export function renderReview(merged, meta, { cfg, prNumber, usage = [], warn = c
     line: issueLine(i),
     side: 'RIGHT',
     body:
-      `${ICON[i.severity] ?? '•'} **${i.severity.toUpperCase()}** (${deMention(i.category)})` +
-      `${i.agreement ? ' -- flagged by both models' : ''}\n\n${deMention(i.issue)}\n\n` +
+      severityLabel(i) +
+      `${i.agreement ? ', flagged by both models' : ''}\n\n${deMention(i.issue)}\n\n` +
       (i.suggested_fix ? `**Suggested fix:** ${deMention(i.suggested_fix)}` : ''),
   }));
 
@@ -132,6 +139,6 @@ export function renderUnreviewable({ noPatch, omitted, unlisted, maxDiffTokens }
     unlisted && `GitHub's file listing is capped and left ${unlisted} changed file(s) unlisted`,
   ].filter(Boolean);
   return unreviewed.length
-    ? `🤖 AI review could NOT run -- these changes were NOT reviewed:\n` + unreviewed.map((s) => `- ${s}`).join('\n')
-    : '🤖 Nothing reviewable in this PR after filtering (lockfiles/generated code are skipped).';
+    ? `AI review could not run. These changes were not reviewed:\n` + unreviewed.map((s) => `- ${s}`).join('\n')
+    : 'AI review found nothing reviewable in this PR after filtering (lockfiles and generated code are skipped).';
 }

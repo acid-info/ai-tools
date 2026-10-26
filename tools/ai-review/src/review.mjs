@@ -41,7 +41,7 @@ export const localMerge = (reviewA, reviewB) => ({
   issues: [...reviewA.issues, ...reviewB.issues]
     .filter((i) => i.severity !== 'nit')
     .sort((x, y) => (RANK[y.severity] ?? 0) - (RANK[x.severity] ?? 0)),
-  summary: [reviewA.overall, reviewB.overall].filter(Boolean).join(' -- '),
+  summary: [reviewA.overall, reviewB.overall].filter(Boolean).join('\n\n'),
 });
 
 // synth_model on its own provider. If that provider's reviewer failed, the provider is presumed
