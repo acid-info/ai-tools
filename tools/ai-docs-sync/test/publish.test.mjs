@@ -33,6 +33,11 @@ describe('publishing helpers', () => {
   test('marker round-trips, cannot be closed from inside, and ignores junk', () => {
     const runs = [{ at: '2026-09-23T00:00:00Z', from: 'abc', to: 'def', files: ['docs/a-->b.md'] }];
     const marker = renderMarker(runs);
+    assert.equal(
+      renderMarker([{ at: '2026-09-23T00:00:00Z', from: 'abc', to: 'def', files: ['docs/a.md'] }]),
+      '<!-- ai-docs-sync {"v":1,"runs":[{"at":"2026-09-23T00:00:00Z","from":"abc","to":"def","files":["docs/a.md"]}]} -->',
+      'the next run parses this back: the shape is a contract'
+    );
     assert.equal(marker.indexOf('-->'), marker.length - 3, 'only the real terminator');
     assert.deepEqual(parseMarker(`text\n${marker}\n`), runs);
     assert.deepEqual(parseMarker('<!-- ai-docs-sync {"v":1,"runs":[{"from":"zz;rm","files":["../x.md","ok.md",3]}]} -->'), [{ at: '', from: '', to: '', files: ['ok.md'] }]);
@@ -147,15 +152,16 @@ describe('PR body', () => {
     assert.match(body, /\n  - 2 dashes replaced mechanically on lines 4, 9; check they read well\n/);
     assert.match(body, /\n  - dash left on line 5: it pairs with a line this run did not change\n/);
     assert.match(body, /#### Style to check \(not blocking\)\n- `docs\/api\.md`: bullet starting with a bold label on line 7\n/);
-    assert.match(body, /- `docs\/crm \(old\)\.md` -- CRM app removed\n  - Checker: ok\n  - Still linked from, not fixed here: `docs\/specs\/x\.md`\n  - To restore it: \[bbbbbbb copy\]\(https:\/\/github\.com\/o\/r\/blob\/b{40}\/docs\/crm%20%28old%29\.md\)/);
+    assert.match(body, /\nRange: `aaaaaaa\.\.bbbbbbb` on `develop`, 3 commit\(s\) \(\[run\]\(https:\/\/github\.com\/o\/r\/actions\/runs\/1\)\)\n/);
+    assert.match(body, /- `docs\/crm \(old\)\.md`: CRM app removed\n  - Checker: ok\n  - Still linked from, not fixed here: `docs\/specs\/x\.md`\n  - To restore it: \[bbbbbbb copy\]\(https:\/\/github\.com\/o\/r\/blob\/b{40}\/docs\/crm%20%28old%29\.md\)/);
     assert.match(body, /`README\.md` \(from `1111111\.\.2222222`\)/);
     assert.match(body, /- `docs\/was\.md` \(deleted\)/);
     assert.match(body, /`docs\/old\.md`: triage was asked again and did not select it\. To force it, re-run with `since=c{40}`/);
     assert.match(body, /`docs\/del\.md` \(delete\): triage was asked again/);
     assert.match(body, /`docs\/api\.md`: redone this run on top of the new version/);
-    assert.match(body, /gate 2: broken relative link\(s\): \.\/@​nope\.md/);
+    assert.match(body, /gate 2\): broken relative link\(s\): \.\/@​nope\.md/);
     assert.match(body, /new URLs: `https:\/\/evil\.example\/@​x`/);
-    assert.match(body, /- `docs\/gone\.md` -- App removed \(no cited source file is in the diff\)/);
+    assert.match(body, /- `docs\/gone\.md`: App removed \(no cited source file is in the diff\)/);
     assert.match(body, /- #153 refactor: move funnel, closes #​99\n  - `abc1234` refactor @​bob/);
     assert.match(body, /Total ~\$0\.0010/);
     assert.ok(!/<!--(?! ai-docs-sync )/.test(body), 'the only HTML comment is the marker');
@@ -176,6 +182,19 @@ describe('PR body', () => {
     assert.match(styleOnly, /  - Checker: ok\n  - Dash and attribution check asked for changes; the correction pass failed, first draft kept:\n    - \[must\] line 3/);
     const unchecked = renderPrBody({ ...base(), kept: [doc({ action: 'correct', unchecked: true, issues: [style] }, true)] });
     assert.match(unchecked, /  - Checker: \*\*unchecked\*\* \(no verdict for this file\)\n  - Dash and attribution check asked for changes, addressed/);
+  });
+
+  test('the fixed text carries no dash separators or en and em dashes', () => {
+    const doc = (path, action, reason) => ({ path, action, reason, check: { action: 'proceed', issues: [] }, flags: [] });
+    const body = renderPrBody({
+      ...base(),
+      kept: [doc('docs/new.md', 'create', 'New page for the CLI'), ...base().kept],
+      reviewer: [{ kind: 'renamed', path: 'docs/cli.md', to: 'docs/client.md', fixed: ['docs/index.md'], linkers: ['docs/other.md'] }],
+      heldBack: [...base().heldBack, { path: 'docs/slow.md', reason: 'writer call failed: timeout' }],
+    });
+    assert.ok(!body.includes(' -- '), body.slice(Math.max(0, body.indexOf(' -- ') - 40), body.indexOf(' -- ') + 40));
+    assert.ok(!/[\u2013\u2014]/.test(body), body.slice(Math.max(0, body.search(/[\u2013\u2014]/) - 40), body.search(/[\u2013\u2014]/) + 40));
+    assert.ok(body.includes('- `docs/new.md`: New page for the CLI\n'), 'a new doc keeps its reason after a colon');
   });
 
   test('restore links escape characters that would end a Markdown link', () => {

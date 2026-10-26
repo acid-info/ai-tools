@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { parseYamlSubset } from '#core/yaml.mjs';
 
 import { hasSymlinkComponent, makeIsEditableDoc, makeIsEditableDocPath, validateRollingBranch } from '../src/allowlist.mjs';
-import { DEFAULTS, loadConfig } from '../src/config.mjs';
+import { DEFAULTS, STATUS_CONTEXT, loadConfig } from '../src/config.mjs';
 import { CFG_TEXT, cfg, tmpRepo } from './helpers.mjs';
 
 describe('config', () => {
@@ -20,6 +20,7 @@ describe('config', () => {
   });
 
   test('applies defaults and appends extra_ignore to the built-in list', () => {
+    assert.equal(STATUS_CONTEXT, 'docs-sync/gates', 'branch protection rules in consumer repos match this exact context');
     const c = cfg();
     assert.equal(c.branch, 'docs/repo/sync');
     assert.equal('max_docs_per_run' in c, false);
