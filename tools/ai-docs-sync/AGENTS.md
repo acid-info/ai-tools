@@ -49,8 +49,10 @@ at startup, so child processes never inherit them.
 5. `triage-docs`: the triage model picks docs to update, create or delete.
 6. `write-docs`: the writer model rewrites or creates each doc, up to `writer_concurrency` at a
    time. A second wave links new docs from an index.
-7. `check-docs`: the checker model reviews every rewrite, create and delete. It can demand at
-   most one correction pass of a rewrite, or drop a create or delete.
+7. `check-docs`: the checker model reviews every rewrite, create and delete, with the guideline
+   files in `<guidelines>`. Before its verdict is acted on, `mechanicalIssues` adds the dashes and
+   attribution it finds on added lines as `must` issues. The stage can demand at most one
+   correction pass of a rewrite, or drop a create or delete.
 8. `gate-docs`: the mechanical gates.
 9. `report`: logs the result, and ends the run (moving the cursor) when nothing survived.
 10. `publish`: renders the commit message, PR title and PR body, pushes the rolling branch,
@@ -125,7 +127,8 @@ Every GitHub and model call has a timeout and is retried once, with backoff, on 
 529. A second failure fails the run and leaves the cursor, so the next push picks the range up
 again. Two exceptions:
 
-- A checker failure leaves the edits unchecked.
+- A checker failure leaves the edits unchecked. Dashes and attribution that `mechanicalIssues`
+  finds still send the file to the correction pass.
 - A writer failure holds back only that doc, unless no writer call succeeded and at least one
   failure was an outage (5xx, 429, 529, network error) rather than about the request (a 400, a
   timeout). Then the run fails.
@@ -209,11 +212,16 @@ tree before use.
 
 ## PR body
 
-Order: deleted docs, reviewer changes, new docs, edited docs, each with the triage reason, the
-checker's verdict and issues, and whether a correction pass addressed them. Then carried and
-discarded changes, held-back files and their gate, new links and raw HTML, suggested deletions,
-the commits and PRs in the range, and API cost. A guideline-file edit or delete is bannered at
-the top with its diff, capped at 8,000 characters.
+The body opens with the range line, then lists deleted docs, reviewer changes, new docs and
+edited docs in that order. Each file line gives the path and, after a colon, the triage reason,
+followed by the checker's verdict and issues and whether a correction pass addressed them.
+`checkerLines` lists issues from the dash and attribution check (`source: 'style'`) apart from the
+checker's, so a reviewer can tell a regex finding from a model's judgement, and new and edited
+docs add the `describeDashFixes` line when gate 4 replaced or left a dash. Then come carried and
+discarded changes, held-back files and their gate, new links, raw HTML and vendor names, "Style to
+check (not blocking)" with each doc's `style` flag, suggested deletions, the commits and PRs in
+the range, and API cost. A guideline-file edit or delete is bannered at the top with its diff,
+capped at 8,000 characters.
 
 - Everything model- or narrative-derived is defused: no live `@mentions`, no closing keywords,
   no raw HTML.
@@ -288,7 +296,8 @@ directly, so workflow changes have to be proved on a real push in a consumer rep
 
 Each pure module has a suite in `test/`. `test/helpers.mjs` provides `CFG_TEXT` and `cfg()` (a
 representative consumer config) and `tmpRepo(files)`, which writes a throwaway tree to a temp
-directory.
+directory. `publish.test.mjs` pins the exact marker shape and `config.test.mjs` pins
+`STATUS_CONTEXT`, since both are consumer contracts.
 
 ## Consumer contracts
 
