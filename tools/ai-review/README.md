@@ -88,7 +88,8 @@ in the body where they do not. Each one opens with its severity and category, su
 
 The body states every way the review fell short: lines starting `Partial review:` for files that
 were not reviewed, `Single-model review:` when a reviewer failed, and a note when a reviewer's
-answer could not be parsed or synthesis failed. An `API usage` table follows, with tokens and
+answer could not be parsed or synthesis failed. When synthesis fails, the summary shows each
+reviewer's overall assessment as its own paragraph. An `API usage` table follows, with tokens and
 estimated cost per model call and the total.
 
 When nothing is left to review after filtering, the reviewer posts a plain comment instead,
