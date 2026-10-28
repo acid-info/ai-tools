@@ -9,7 +9,7 @@ import { MARKER_MAX_CHARS, PR_BODY_MAX } from '../src/config.mjs';
 import { BOT_EMAIL, gitAuthEnv } from '../src/git.mjs';
 import { narrativeOutline } from '../src/narrative.mjs';
 import { blobUrl, renderPrBody } from '../src/pr-body.mjs';
-import { commitMessage, commitScope, lastRunFor, parseMarker, prTitle, regenerateFrom, renderMarker } from '../src/publish.mjs';
+import { commitMessage, commitScope, lastRunFor, parseMarker, prTitle, regenerateFrom, renderMarker, reviewRequestFor } from '../src/publish.mjs';
 
 describe('publishing helpers', () => {
   test('commit scope, subject and body follow the fixed template', () => {
@@ -19,6 +19,13 @@ describe('publishing helpers', () => {
     assert.match(msg, /^docs\(web\): sync with aaaaaaa\.\.bbbbbbb\n\nRange: a{40}\.\.b{40} on develop\n\nFiles:\n- docs\/x\.md\n- docs\/gone\.md \(deleted\)\n- README\.md \(carried forward\)\n- docs\/old\.md \(deleted, carried forward\)\n\nRun: https:\/\/r\n$/);
     assert.ok(!/co-authored|generated/i.test(msg));
     assert.equal(prTitle({ scope: 'web', target: 'develop', to: 'c'.repeat(40) }), 'docs(web): sync docs with develop (up to ccccccc)');
+  });
+
+  test('the review request leaves out the PR author, case-insensitively', () => {
+    const req = { reviewers: ['alice', 'JulesFiliot'], team_reviewers: ['web'] };
+    assert.deepEqual(reviewRequestFor(req, 'julesfiliot'), { reviewers: ['alice'], team_reviewers: ['web'] });
+    assert.deepEqual(reviewRequestFor(req, 'github-actions[bot]'), req);
+    assert.deepEqual(reviewRequestFor(req, undefined), req);
   });
 
   test('the push credential is an env-only extraheader that disables stored credentials', () => {
