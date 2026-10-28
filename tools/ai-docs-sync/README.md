@@ -99,7 +99,7 @@ At `.github/docs-sync.yml`, read from the **target branch**. Only `doc_paths` is
 | `label` | Label on the rolling PR. Default `docs-sync`. |
 | `format_check` | `off` (default) or `strict`, which runs your prettier and needs `setup_command`. |
 | `setup_command` | Shell run before prettier, e.g. `corepack enable && pnpm install --frozen-lockfile`. |
-| `reviewers` | Users (`@login`) and teams (`@org/team`, same org as the repo) asked to review the rolling PR each time it is opened or updated. Default none. |
+| `reviewers` | Users (`@login`) and teams (`@org/team`, same org as the repo) asked to review the rolling PR each time it is opened or updated. The PR author is skipped. Default none. |
 
 ```yaml
 doc_paths:

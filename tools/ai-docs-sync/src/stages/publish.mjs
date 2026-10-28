@@ -9,7 +9,7 @@ import { BOT_EMAIL, BOT_NAME } from '../git.mjs';
 import { unifiedDiff } from '../linediff.mjs';
 import { narrativeOutline } from '../narrative.mjs';
 import { renderPrBody } from '../pr-body.mjs';
-import { commitMessage, commitScope, lastRunFor, prTitle, regenerateFrom } from '../publish.mjs';
+import { commitMessage, commitScope, lastRunFor, prTitle, regenerateFrom, reviewRequestFor } from '../publish.mjs';
 
 export async function publish(ctx) {
   const { DRY_RUN, REPO, RUN_URL, TARGET_BRANCH, capped, carried, carryBase, cfg, commits, count, decisions, delPlan, dropped, findOpenPr, from, gh, ghCommit, git, head, heldBack, isNewDoc, kept, keptDeletes, keptPaths, linked, log, moveCursor, openPr, packed, prevRuns, prs, pushUrl, pushWithToken, remoteSha, reviewer, reviewerRemoved, staleCarried, tombstones, treeEntry, usage, warn } = ctx;
@@ -142,8 +142,10 @@ export async function publish(ctx) {
     }
   }
   // On every publish, so a reviewer who already reviewed is asked again. One call per field: a
-  // token that cannot see org teams then still requests the users.
-  for (const [field, names] of Object.entries(cfg.reviewRequest)) {
+  // token that cannot see org teams then still requests the users. The PR author is left out.
+  const author = pr.user?.login;
+  if (author && cfg.reviewRequest.reviewers.some((r) => r.toLowerCase() === author.toLowerCase())) log(`Not requesting ${author}: they authored the PR`);
+  for (const [field, names] of Object.entries(reviewRequestFor(cfg.reviewRequest, author))) {
     if (!names.length) continue;
     try {
       await gh(`/repos/${REPO}/pulls/${pr.number}/requested_reviewers`, { method: 'POST', body: { [field]: names } });

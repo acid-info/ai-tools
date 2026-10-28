@@ -25,6 +25,13 @@ export function commitMessage({ scope, from, to, target, files, deleted = [], ca
   return lines.join('\n') + '\n';
 }
 
+// GitHub refuses (422) a review request naming the PR author, failing the whole call. With a
+// personal DOCS_SYNC_TOKEN the author is that token's user, who may also be a configured reviewer.
+export function reviewRequestFor(reviewRequest, author) {
+  const a = String(author ?? '').toLowerCase();
+  return { ...reviewRequest, reviewers: (reviewRequest.reviewers ?? []).filter((r) => r.toLowerCase() !== a) };
+}
+
 export const prTitle = ({ scope, target, to }) => `docs(${scope}): sync docs with ${target} (up to ${short7(to)})`;
 const MARKER_RE = /<!-- ai-docs-sync (\{[\s\S]*?\}) -->/;
 
