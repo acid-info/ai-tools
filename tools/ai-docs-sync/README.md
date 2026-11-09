@@ -30,12 +30,14 @@ on:
         default: false
 
 permissions:
-  contents: write
-  pull-requests: write
-  statuses: write
+  contents: read
 
 jobs:
   sync:
+    permissions:
+      contents: write
+      pull-requests: write
+      statuses: write
     uses: acid-info/ai-tools/.github/workflows/ai-docs-sync.yml@ai-docs-sync/v1
     with:
       # Optional. Forces the target branch. Omitted: `develop` if it exists, else the default
@@ -54,6 +56,10 @@ jobs:
 
 Then add a [configuration](#configuration) file on the target branch.
 
+- The workflow defaults to `contents: read`, and only the `sync` job gets the three write scopes
+  the tool needs: `contents: write` for the rolling branch and the cursor ref, `pull-requests:
+  write` for the rolling PR, and `statuses: write` for the `docs-sync/gates` status. A job you add
+  to this file later starts read-only.
 - `push` workflows run from the workflow file at the pushed commit, so you can try the tool end to
   end by temporarily listing a feature branch under `branches:`.
 - Pass the secrets explicitly. Do **not** use `secrets: inherit`: the tool has no business seeing
